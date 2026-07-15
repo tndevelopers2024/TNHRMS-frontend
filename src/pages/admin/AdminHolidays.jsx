@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Calendar, Trash2 } from "lucide-react";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { Plus, Calendar, Trash2, Pencil } from "lucide-react";
 
 export default function AdminHolidays() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [holidays, setHolidays] = useState([]);
+  const [editId, setEditId] = useState(null);
   
   // Form states
   const [name, setName] = useState('');
@@ -31,14 +33,27 @@ export default function AdminHolidays() {
     fetchHolidays();
   }, []);
 
-  const handleAddHoliday = async (e) => {
+  const handleEditClick = (holiday) => {
+    setEditId(holiday._id);
+    setName(holiday.name);
+    setDate(new Date(holiday.date).toISOString().split('T')[0]);
+    setType(holiday.type);
+    setShowAddForm(true);
+  };
+
+  const handleSaveHoliday = async (e) => {
     e.preventDefault();
     if (!name || !date) return;
     
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/holidays`, {
-        method: 'POST',
+      const method = editId ? 'PUT' : 'POST';
+      const url = editId 
+        ? `${import.meta.env.VITE_API_URL}/api/admin/holidays/${editId}`
+        : `${import.meta.env.VITE_API_URL}/api/admin/holidays`;
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, date, type })
       });
@@ -46,19 +61,21 @@ export default function AdminHolidays() {
         setName('');
         setDate('');
         setType('National');
+        setEditId(null);
         setShowAddForm(false);
         fetchHolidays();
       } else {
-        console.error("Failed to add holiday");
+        console.error("Failed to save holiday");
       }
     } catch (err) {
-      console.error("Error adding holiday:", err);
+      console.error("Error saving holiday:", err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const removeHoliday = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this holiday?")) return;
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/holidays/${id}`, {
         method: 'DELETE'
@@ -78,7 +95,15 @@ export default function AdminHolidays() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Holiday Management</h1>
           <p className="text-muted-foreground mt-1">Add, edit, or remove company holidays.</p>
         </div>
-        <Button onClick={() => setShowAddForm(!showAddForm)} variant={showAddForm ? "outline" : "gradient"}>
+        <Button onClick={() => {
+          setShowAddForm(!showAddForm);
+          if (showAddForm) {
+            setEditId(null);
+            setName('');
+            setDate('');
+            setType('National');
+          }
+        }} variant={showAddForm ? "outline" : "gradient"}>
           {showAddForm ? "Cancel" : <><Plus className="w-4 h-4 mr-2" /> Add Holiday</>}
         </Button>
       </div>
@@ -86,10 +111,10 @@ export default function AdminHolidays() {
       {showAddForm && (
         <Card className="border-0 shadow-sm animate-in slide-in-from-top-4 fade-in duration-300">
           <CardHeader>
-            <CardTitle>Add New Holiday</CardTitle>
+            <CardTitle>{editId ? "Edit Holiday" : "Add New Holiday"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleAddHoliday} className="space-y-4">
+            <form onSubmit={handleSaveHoliday} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Holiday Name</Label>
@@ -97,7 +122,7 @@ export default function AdminHolidays() {
                 </div>
                 <div className="space-y-2">
                   <Label>Date</Label>
-                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                  <DatePicker value={date} onChange={setDate} required />
                 </div>
                 <div className="space-y-2">
                   <Label>Type</Label>
@@ -113,7 +138,13 @@ export default function AdminHolidays() {
                 </div>
               </div>
               <div className="flex justify-end pt-2 gap-2">
-                <Button variant="outline" type="button" onClick={() => setShowAddForm(false)}>
+                <Button variant="outline" type="button" onClick={() => {
+                  setShowAddForm(false);
+                  setEditId(null);
+                  setName('');
+                  setDate('');
+                  setType('National');
+                }}>
                   Cancel
                 </Button>
                 <Button variant="gradient" className="px-8 shadow-md" type="submit" disabled={isSubmitting}>
@@ -140,9 +171,14 @@ export default function AdminHolidays() {
                     {holiday.type}
                   </span>
                 </div>
-                <Button variant="ghost" size="icon" className="text-gray-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => removeHoliday(holiday._id)}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                <div className="flex space-x-1">
+                  <Button variant="ghost" size="icon" className="text-gray-400 hover:text-blue-600 hover:bg-blue-50" onClick={() => handleEditClick(holiday)}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="text-gray-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => removeHoliday(holiday._id)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

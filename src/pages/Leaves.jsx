@@ -234,7 +234,7 @@ export default function Leaves() {
                     <option>Casual Leave</option>
                     <option>Sick Leave</option>
                     <option>Earned Leave</option>
-                    <option>Leave Without Pay</option>
+                    <option>Loss of Pay</option>
                   </select>
                 </div>
                 <div className="space-y-2">

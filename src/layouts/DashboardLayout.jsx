@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Outlet, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   CalendarCheck, 
@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useSocket, SocketProvider } from '../context/SocketContext';
+import { toast } from 'react-hot-toast';
 
 const employeeLinks = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -38,13 +40,18 @@ const adminLinks = [
   { name: 'Work Assignment', path: '/admin/work', icon: ClipboardList },
   { name: 'Leave Approvals', path: '/admin/leaves', icon: CheckSquare },
   { name: 'Manage Holidays', path: '/admin/holidays', icon: CalendarDays },
+  { name: 'Payroll', path: '/admin/payroll', icon: Wallet },
   { name: 'Profile', path: '/profile', icon: User },
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
 
-export default function DashboardLayout() {
+function DashboardLayoutContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const dropdownRef = useRef(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const userInfoString = localStorage.getItem('userInfo');
   
@@ -70,6 +77,69 @@ export default function DashboardLayout() {
     window.addEventListener('profileImageUpdated', handleProfileUpdate);
     return () => window.removeEventListener('profileImageUpdated', handleProfileUpdate);
   }, []);
+
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNotification = (data) => {
+      setNotifications(prev => [{
+        id: Date.now(),
+        message: data.message,
+        time: new Date(),
+        type: data.type,
+        read: false
+      }, ...prev]);
+      
+      // Automatically open the dropdown when a new notification arrives
+      setShowNotifications(true);
+
+      toast(data.message, { 
+        icon: '🔔',
+        duration: 5000,
+        style: {
+          borderRadius: '10px',
+          background: '#333',
+          color: '#fff',
+        },
+      });
+    };
+
+    socket.on('notification', handleNotification);
+
+    return () => {
+      socket.off('notification', handleNotification);
+    };
+  }, [socket]);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleNotificationClick = (notif) => {
+    // Mark as read
+    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+    setShowNotifications(false); // Close dropdown
+
+    if (role === 'admin') {
+      if (notif.type === 'leave_application') navigate('/admin/leaves');
+      else if (notif.type === 'task_update') navigate('/admin/work');
+    } else {
+      if (notif.type === 'task') navigate('/work-log');
+      else if (notif.type === 'leave') navigate('/leaves');
+    }
+  };
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
@@ -141,22 +211,56 @@ export default function DashboardLayout() {
             >
               <Menu className="w-6 h-6 text-gray-600" />
             </Button>
-            
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input 
-                type="text" 
-                placeholder="Search..." 
-                className="pl-10 w-64 h-10 rounded-full border-gray-200 bg-gray-50 focus-visible:ring-primary/20 focus-visible:bg-white"
-              />
-            </div>
           </div>
           
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" size="icon" className="relative text-gray-500 hover:text-primary">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2.5 w-2 h-2 bg-destructive rounded-full border-2 border-white"></span>
-            </Button>
+            <div className="relative" ref={dropdownRef}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative text-gray-500 hover:text-primary"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                <Bell className="w-5 h-5" />
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-2 right-2.5 w-2 h-2 bg-destructive rounded-full border-2 border-white"></span>
+                )}
+              </Button>
+              
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <h3 className="font-semibold text-gray-900">Notifications</h3>
+                    {notifications.length > 0 && (
+                      <button 
+                        onClick={() => setNotifications(prev => prev.map(n => ({...n, read: true})))}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-gray-500">No new notifications</div>
+                    ) : (
+                      notifications.map(notif => (
+                        <div 
+                          key={notif.id} 
+                          onClick={() => handleNotificationClick(notif)}
+                          className={`p-4 border-b border-gray-50 hover:bg-gray-100 transition-colors cursor-pointer ${!notif.read ? 'bg-primary/5' : ''}`}
+                        >
+                          <p className="text-sm text-gray-800">{notif.message}</p>
+                          <span className="text-xs text-gray-400 mt-1 block">
+                            {notif.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             
             <div className="flex items-center space-x-3 border-l border-gray-200 pl-4 ml-2">
               <div className="hidden md:flex flex-col items-end">
@@ -180,5 +284,13 @@ export default function DashboardLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function DashboardLayout() {
+  return (
+    <SocketProvider>
+      <DashboardLayoutContent />
+    </SocketProvider>
   );
 }

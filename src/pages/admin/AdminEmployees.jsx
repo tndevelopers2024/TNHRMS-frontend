@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Users, Briefcase, X, ClipboardList, Settings2, Trash2, Edit2, Check } from "lucide-react";
+import { Plus, Users, Briefcase, X, ClipboardList, Settings2, Trash2, Edit2, Check, Wallet } from "lucide-react";
 import { DatePicker } from "@/components/ui/DatePicker";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../context/ConfirmContext";
@@ -13,6 +13,7 @@ export default function AdminEmployees() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState(null);
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [editingDeptId, setEditingDeptId] = useState(null);
@@ -133,25 +134,35 @@ export default function AdminEmployees() {
     }
   };
 
-  const handleAddEmployee = async (e) => {
+  const handleSaveEmployee = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees`, {
-        method: 'POST',
+      const isEditing = !!editingEmployeeId;
+      const url = isEditing 
+        ? `${import.meta.env.VITE_API_URL}/api/admin/employees/${editingEmployeeId}`
+        : `${import.meta.env.VITE_API_URL}/api/admin/employees`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
       if (res.ok) {
         setShowAddForm(false);
+        setEditingEmployeeId(null);
         setFormData({ name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '', emergencyContact: { name: '', relationship: '', phone: '' } });
         fetchEmployees();
-        toast.success("Employee added successfully");
+        toast.success(isEditing ? "Employee updated successfully" : "Employee added successfully");
+        if (isEditing && selectedDetails) {
+            handleCardClick(editingEmployeeId);
+        }
       } else {
         const errorData = await res.json();
-        toast.error(errorData.message || 'Failed to add employee');
+        toast.error(errorData.message || `Failed to ${isEditing ? 'update' : 'add'} employee`);
       }
     } catch (err) {
-      console.error("Error adding employee:", err);
+      console.error("Error saving employee:", err);
     }
   };
 
@@ -190,7 +201,11 @@ export default function AdminEmployees() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Employees Directory</h1>
           <p className="text-muted-foreground mt-1">Manage users and organize them by department.</p>
         </div>
-        <Button onClick={() => setShowAddForm(!showAddForm)} className="bg-primary hover:bg-primary/90 text-white shadow-sm">
+        <Button onClick={() => {
+          setEditingEmployeeId(null);
+          setFormData({ name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '', emergencyContact: { name: '', relationship: '', phone: '' } });
+          setShowAddForm(!showAddForm);
+        }} className="bg-primary hover:bg-primary/90 text-white shadow-sm">
           <Plus className="w-4 h-4 mr-2" />
           {showAddForm ? "Cancel" : "Add Employee"}
         </Button>
@@ -200,13 +215,13 @@ export default function AdminEmployees() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Add New Employee</h2>
+              <h2 className="text-xl font-bold text-gray-900">{editingEmployeeId ? "Edit Employee" : "Add New Employee"}</h2>
               <Button variant="ghost" size="icon" onClick={() => setShowAddForm(false)} className="text-gray-500 hover:text-gray-900">
                 <X className="w-5 h-5" />
               </Button>
             </div>
             <div className="p-6 overflow-y-auto">
-              <form onSubmit={handleAddEmployee} className="space-y-6">
+              <form onSubmit={handleSaveEmployee} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Basic Details */}
                   <div className="space-y-2">
@@ -242,8 +257,8 @@ export default function AdminEmployees() {
                     <DatePicker required value={formData.joiningDate} onChange={val => setFormData({...formData, joiningDate: val})} />
                   </div>
                   <div className="space-y-2">
-                    <Label>Salary</Label>
-                    <Input type="number" required value={formData.salary} onChange={e => setFormData({...formData, salary: e.target.value})} placeholder="e.g. 50000" />
+                    <Label>Salary (Annual)</Label>
+                    <Input type="number" required value={formData.salary} onChange={e => setFormData({...formData, salary: e.target.value})} placeholder="e.g. 500000 for 5 LPA" />
                   </div>
 
                   {/* Personal Details */}
@@ -291,7 +306,7 @@ export default function AdminEmployees() {
                 
                 <div className="flex justify-end pt-4 border-t border-gray-100 mt-6">
                   <Button type="button" variant="outline" className="mr-2" onClick={() => setShowAddForm(false)}>Cancel</Button>
-                  <Button type="submit">Save Employee</Button>
+                  <Button type="submit">{editingEmployeeId ? "Save Changes" : "Save Employee"}</Button>
                 </div>
               </form>
             </div>
@@ -385,6 +400,59 @@ export default function AdminEmployees() {
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Date of Birth</p><p className="font-medium text-gray-900">{selectedDetails.employee.dob ? new Date(selectedDetails.employee.dob).toLocaleDateString('en-GB') : 'N/A'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Address</p><p className="font-medium text-gray-900">{selectedDetails.employee.address || 'N/A'}</p></div>
                   </div>
+
+                  {/* Payroll / LOP Info */}
+                  {selectedDetails.employee.salary ? (
+                    <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-100 mt-6">
+                      <h4 className="text-lg font-semibold text-emerald-800 mb-4 flex items-center">
+                        <Wallet className="w-5 h-5 mr-2" />
+                        Payroll & LOP Calculation (Current Month)
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div>
+                          <p className="text-emerald-600/80 mb-1 text-sm">Monthly Salary</p>
+                          <p className="font-bold text-emerald-900 text-lg">₹{Math.round(selectedDetails.employee.salary / 12).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-emerald-600/80 mb-1 text-sm">Per Day Pay (LOP Rate)</p>
+                          <p className="font-bold text-emerald-900 text-lg">₹{Math.round((selectedDetails.employee.salary / 12) / 30).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-rose-600/80 mb-1 text-sm">LOP Days Taken</p>
+                          <p className="font-bold text-rose-700 text-lg">
+                            {(() => {
+                              const currentMonth = new Date().getMonth();
+                              const currentYear = new Date().getFullYear();
+                              return (selectedDetails.leaves || []).filter(leave => {
+                                const leaveDate = new Date(leave.startDate);
+                                return leave.type === 'Loss of Pay' && 
+                                       leave.status === 'Approved' && 
+                                       leaveDate.getMonth() === currentMonth && 
+                                       leaveDate.getFullYear() === currentYear;
+                              }).reduce((acc, curr) => acc + curr.days, 0);
+                            })()} Days
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-rose-600/80 mb-1 text-sm">Total LOP Deduction</p>
+                          <p className="font-bold text-rose-700 text-lg">
+                            ₹{(() => {
+                              const currentMonth = new Date().getMonth();
+                              const currentYear = new Date().getFullYear();
+                              const days = (selectedDetails.leaves || []).filter(leave => {
+                                const leaveDate = new Date(leave.startDate);
+                                return leave.type === 'Loss of Pay' && 
+                                       leave.status === 'Approved' && 
+                                       leaveDate.getMonth() === currentMonth && 
+                                       leaveDate.getFullYear() === currentYear;
+                              }).reduce((acc, curr) => acc + curr.days, 0);
+                              return Math.round(days * ((selectedDetails.employee.salary / 12) / 30)).toLocaleString();
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {/* Emergency Contact */}
                   {selectedDetails.employee.emergencyContact && selectedDetails.employee.emergencyContact.name && (
@@ -544,9 +612,32 @@ export default function AdminEmployees() {
             
             <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-2">
               {selectedDetails && selectedDetails.employee && (
-                <Button variant="destructive" onClick={() => handleDeleteEmployee(selectedDetails.employee._id)}>
-                  Delete Employee
-                </Button>
+                <>
+                  <Button variant="outline" onClick={() => {
+                    const emp = selectedDetails.employee;
+                    setFormData({
+                      name: emp.name || '',
+                      email: emp.email || '',
+                      department: emp.department || '',
+                      designation: emp.designation || '',
+                      phone: emp.phone || '',
+                      address: emp.address || '',
+                      gender: emp.gender || '',
+                      dob: emp.dob ? new Date(emp.dob).toISOString().split('T')[0] : '',
+                      joiningDate: emp.joiningDate ? new Date(emp.joiningDate).toISOString().split('T')[0] : '',
+                      salary: emp.salary || '',
+                      emergencyContact: emp.emergencyContact || { name: '', relationship: '', phone: '' }
+                    });
+                    setEditingEmployeeId(emp._id);
+                    setIsModalOpen(false); // Close details modal before opening edit form
+                    setShowAddForm(true);
+                  }} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200">
+                    <Edit2 className="w-4 h-4 mr-2" /> Edit
+                  </Button>
+                  <Button variant="destructive" onClick={() => handleDeleteEmployee(selectedDetails.employee._id)}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Delete
+                  </Button>
+                </>
               )}
               <Button variant="outline" onClick={() => setIsModalOpen(false)}>Close</Button>
             </div>

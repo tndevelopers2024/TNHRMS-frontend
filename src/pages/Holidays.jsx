@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Share2 } from "lucide-react";
+import { CalendarDays, Share2, X, Info, AlertTriangle } from "lucide-react";
 
 export default function Holidays() {
   const [holidays, setHolidays] = useState([]);
   const [filterMonth, setFilterMonth] = useState('All');
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
 
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL}/api/admin/holidays`)
@@ -70,7 +71,7 @@ export default function Holidays() {
                   Offices will remain closed. Teams are encouraged to celebrate with their families and friends. Wishing everyone a prosperous year ahead!
                 </p>
                 
-                <Button variant="outline" className="w-full rounded-full text-primary border-primary/20 hover:bg-primary/5 mt-2">
+                <Button variant="outline" className="w-full rounded-full text-primary border-primary/20 hover:bg-primary/5 mt-2" onClick={() => setShowPolicyModal(true)}>
                   View Policy details
                 </Button>
               </div>
@@ -104,11 +105,7 @@ export default function Holidays() {
       {/* Right Content - Annual List */}
       <div className="flex-1 space-y-4">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Annual List {new Date().getFullYear()}</h2>
-          <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-900">
-             Policy v2.4
-          </Button>
-        </div>
+          <h2 className="text-xl font-bold text-gray-900">Annual List {new Date().getFullYear()}</h2>        </div>
 
         <div className="space-y-4">
           {filteredHolidays.map(holiday => {
@@ -141,15 +138,7 @@ export default function Holidays() {
                     </p>
                   </div>
                   
-                  {/* Actions */}
-                  <div className="flex space-x-2 shrink-0">
-                    <Button variant="ghost" size="icon" className="text-gray-400 hover:text-primary hover:bg-primary/5">
-                      <CalendarDays className="w-5 h-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="text-gray-400 hover:text-primary hover:bg-primary/5">
-                      <Share2 className="w-5 h-5" />
-                    </Button>
-                  </div>
+
                 </CardContent>
               </Card>
             )
@@ -161,11 +150,62 @@ export default function Holidays() {
             </div>
           )}
         </div>
-
-        <Button variant="outline" className="w-full mt-4 text-gray-600 border-dashed border-gray-300">
-          Show Full Calendar Year
-        </Button>
       </div>
+
+      {showPolicyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg shadow-2xl relative border-0 overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-primary to-blue-400"></div>
+            
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute top-4 right-4 z-10 rounded-full hover:bg-gray-100"
+              onClick={() => setShowPolicyModal(false)}
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </Button>
+            
+            <CardContent className="p-8 space-y-6">
+              <div className="flex items-center space-x-4 mb-2">
+                <div className="w-12 h-12 bg-primary/10 flex items-center justify-center rounded-2xl shrink-0">
+                  <Info className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Holiday Policy Details</h2>
+                  <p className="text-sm text-gray-500 font-medium">Version 2.4 - Current Year</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                  <h4 className="font-bold text-emerald-800 mb-1 flex items-center">
+                    National & Public Holidays
+                  </h4>
+                  <p className="text-sm text-emerald-700/90 leading-relaxed">
+                    These are paid holidays for all employees. The office will remain completely closed. If a public holiday falls on a weekend, a compensatory off may be provided as per local regulations.
+                  </p>
+                </div>
+
+                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                  <h4 className="font-bold text-purple-800 mb-1 flex items-center">
+                    <AlertTriangle className="w-4 h-4 mr-2" /> Restricted / Optional
+                  </h4>
+                  <p className="text-sm text-purple-700/90 leading-relaxed">
+                    Employees may choose to avail up to <strong>2 optional holidays</strong> per calendar year. You must apply for an optional holiday at least one week in advance through the leave management system.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button variant="gradient" className="px-6" onClick={() => setShowPolicyModal(false)}>
+                  I Understand
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,6 +17,20 @@ export default function Payslips() {
     }
   }, []);
 
+  const isMonthEnded = (monthStr) => {
+    if (!monthStr) return false;
+    const [m, y] = monthStr.split('-');
+    const slipMonth = parseInt(m, 10) - 1; // 0-indexed
+    const slipYear = parseInt(y, 10);
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    if (slipYear < currentYear) return true;
+    if (slipYear === currentYear && slipMonth < currentMonth) return true;
+    return false;
+  };
+
   return (
     <div className="space-y-6 relative">
       <div>
@@ -37,16 +51,24 @@ export default function Payslips() {
             <CardContent className="space-y-4 relative z-10">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Net Pay</p>
-                <h3 className="text-3xl font-bold text-gray-900">${slip.netPay ? slip.netPay.toLocaleString() : '0'}</h3>
+                <h3 className="text-3xl font-bold text-gray-900">₹{slip.netPay ? slip.netPay.toLocaleString() : '0'}</h3>
               </div>
             </CardContent>
             <CardFooter className="flex space-x-3 relative z-10">
-              <Button variant="outline" className="flex-1 border-primary/20 hover:bg-primary/5 hover:text-primary" onClick={() => setSelectedPayslip(slip)}>
-                <Eye className="w-4 h-4 mr-2" /> Preview
-              </Button>
-              <Button variant="gradient" className="flex-1">
-                <Download className="w-4 h-4 mr-2" /> PDF
-              </Button>
+              {isMonthEnded(slip.month) ? (
+                <>
+                  <Button variant="outline" className="flex-1 border-primary/20 hover:bg-primary/5 hover:text-primary" onClick={() => setSelectedPayslip(slip)}>
+                    <Eye className="w-4 h-4 mr-2" /> Preview
+                  </Button>
+                  <Button variant="gradient" className="flex-1">
+                    <Download className="w-4 h-4 mr-2" /> PDF
+                  </Button>
+                </>
+              ) : (
+                <div className="w-full text-center text-xs font-medium text-amber-600 bg-amber-50 py-2 rounded-md border border-amber-100">
+                  Available next month
+                </div>
+              )}
             </CardFooter>
           </Card>
         )) : (
@@ -81,10 +103,10 @@ export default function Payslips() {
                     <p className="text-sm text-muted-foreground">123 Business Avenue, Tech Park, City</p>
                   </div>
                 </div>
-                <div className="text-left md:text-right">
-                  <h3 className="text-xl font-bold text-primary tracking-tight">PAYSLIP</h3>
-                  <p className="text-sm font-medium text-gray-600">{selectedPayslip.month} {selectedPayslip.year}</p>
-                </div>
+                  <div className="flex justify-between items-center bg-gray-50 rounded-b-xl px-6 py-5">
+                    <span className="font-bold text-gray-900 text-lg">NET SALARY PAYABLE</span>
+                    <span className="font-black text-3xl text-emerald-600">₹{(selectedPayslip.netPay || 0).toLocaleString()}</span>
+                  </div>
               </div>
 
               {/* Details */}
@@ -92,10 +114,10 @@ export default function Payslips() {
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground uppercase font-semibold">Employee Details</p>
                   <div className="bg-gray-50 p-4 rounded-xl space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-gray-500">Name:</span> <span className="font-medium">John Doe</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">ID:</span> <span className="font-medium">EMP-00123</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Designation:</span> <span className="font-medium">Software Engineer</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">Department:</span> <span className="font-medium">Engineering</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Name:</span> <span className="font-medium">{userInfo.name || 'N/A'}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">ID:</span> <span className="font-medium">{userInfo.employeeId || userInfo._id.slice(-6).toUpperCase()}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Designation:</span> <span className="font-medium">{userInfo.designation || 'N/A'}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Department:</span> <span className="font-medium">{userInfo.department || 'N/A'}</span></div>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -122,28 +144,28 @@ export default function Payslips() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     <tr className="bg-gray-50/50">
-                      <td className="px-4 py-3 text-gray-700">Basic Salary</td>
-                      <td className="px-4 py-3 text-right font-medium">${((userInfo.salary || 0) * 0.6).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-gray-700">Tax</td>
-                      <td className="px-4 py-3 text-right font-medium">${(((userInfo.salary || 0) - (selectedPayslip.netPay || 0)) * 0.7).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-700">Basic Salary (60%)</td>
+                      <td className="px-4 py-3 text-right font-medium">₹{Math.round((selectedPayslip.monthlySalary || Math.round((userInfo.salary || 0) / 12)) * 0.6).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-700">Loss of Pay (LOP)</td>
+                      <td className="px-4 py-3 text-right font-medium text-rose-600">-₹{(selectedPayslip.totalDeduction || 0).toLocaleString()}</td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-3 text-gray-700">House Rent Allowance</td>
-                      <td className="px-4 py-3 text-right font-medium">${((userInfo.salary || 0) * 0.2).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-gray-700">Provident Fund</td>
-                      <td className="px-4 py-3 text-right font-medium">${(((userInfo.salary || 0) - (selectedPayslip.netPay || 0)) * 0.3).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-700">House Rent Allowance (20%)</td>
+                      <td className="px-4 py-3 text-right font-medium">₹{Math.round((selectedPayslip.monthlySalary || Math.round((userInfo.salary || 0) / 12)) * 0.2).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-700"></td>
+                      <td className="px-4 py-3 text-right font-medium"></td>
                     </tr>
                     <tr className="bg-gray-50/50">
-                      <td className="px-4 py-3 text-gray-700">Special Allowance</td>
-                      <td className="px-4 py-3 text-right font-medium">${((userInfo.salary || 0) * 0.2).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-700">Special Allowance (20%)</td>
+                      <td className="px-4 py-3 text-right font-medium">₹{Math.round((selectedPayslip.monthlySalary || Math.round((userInfo.salary || 0) / 12)) * 0.2).toLocaleString()}</td>
                       <td className="px-4 py-3 text-gray-700"></td>
                       <td className="px-4 py-3 text-right font-medium"></td>
                     </tr>
                     <tr className="border-t-2 border-gray-200">
                       <td className="px-4 py-4 font-bold text-gray-900">Gross Earnings</td>
-                      <td className="px-4 py-4 text-right font-bold text-emerald-600">${(userInfo.salary || 0).toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right font-bold text-emerald-600">₹{(selectedPayslip.monthlySalary || Math.round((userInfo.salary || 0) / 12)).toLocaleString()}</td>
                       <td className="px-4 py-4 font-bold text-gray-900">Total Deductions</td>
-                      <td className="px-4 py-4 text-right font-bold text-rose-600">${((userInfo.salary || 0) - (selectedPayslip.netPay || 0)).toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right font-bold text-rose-600">-₹{(selectedPayslip.totalDeduction || 0).toLocaleString()}</td>
                     </tr>
                   </tbody>
                 </table>

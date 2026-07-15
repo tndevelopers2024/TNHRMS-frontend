@@ -202,13 +202,13 @@ export default function AdminWork() {
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-gray-500 uppercase bg-gray-50/80">
               <tr>
-                <th className="px-6 py-4 font-medium">Employee</th>
-                <th className="px-6 py-4 font-medium">Email</th>
-                <th className="px-6 py-4 font-medium">Department</th>
-                <th className="px-6 py-4 font-medium">Designation</th>
-                <th className="px-6 py-4 font-medium">Assigned Work</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium text-right">Action</th>
+                <th className="px-6 py-4 font-medium whitespace-nowrap">Employee</th>
+                <th className="px-6 py-4 font-medium whitespace-nowrap">Email</th>
+                <th className="px-6 py-4 font-medium whitespace-nowrap">Department</th>
+                <th className="px-6 py-4 font-medium whitespace-nowrap">Designation</th>
+                <th className="px-6 py-4 font-medium whitespace-nowrap">Assigned Work</th>
+                <th className="px-6 py-4 font-medium whitespace-nowrap">Status</th>
+                <th className="px-6 py-4 font-medium text-right whitespace-nowrap">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -219,22 +219,24 @@ export default function AdminWork() {
                     className="bg-white hover:bg-gray-50/50 transition-colors cursor-pointer group"
                     onClick={() => handleRowClick(emp)}
                   >
-                    <td className="px-6 py-4 font-medium text-gray-900 flex items-center space-x-3">
-                      <img 
-                        src={`https://api.dicebear.com/7.x/notionists/svg?seed=${emp.name.replace(' ', '')}&backgroundColor=f3f4f6`}
-                        alt={emp.name} 
-                        className="w-8 h-8 rounded-full border bg-gray-50"
-                      />
-                      <span>{emp.name}</span>
+                    <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                      <div className="flex items-center space-x-3">
+                        <img 
+                          src={`https://api.dicebear.com/7.x/notionists/svg?seed=${emp.name.replace(' ', '')}&backgroundColor=f3f4f6`}
+                          alt={emp.name} 
+                          className="w-8 h-8 rounded-full border bg-gray-50"
+                        />
+                        <span>{emp.name}</span>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-gray-500">{emp.email}</td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500">{emp.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-600">
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                         <Briefcase className="w-3 h-3 mr-1" />
                         {emp.department || 'General'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-500">{emp.designation}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500">{emp.designation}</td>
                     <td className="px-6 py-4">
                       {emp.latestTask ? (
                         <div className="line-clamp-2 text-xs text-gray-700 max-w-xs" title={emp.latestTask.description}>
@@ -244,9 +246,9 @@ export default function AdminWork() {
                         <span className="text-gray-400 text-xs italic">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {emp.latestTask ? (
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${
                           emp.latestTask.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' : 
                           emp.latestTask.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
                           'bg-amber-100 text-amber-700'

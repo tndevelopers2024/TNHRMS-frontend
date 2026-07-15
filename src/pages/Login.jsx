@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import { Eye, EyeOff, LayoutDashboard, Fingerprint } from "lucide-react"
 
 export default function Login() {
@@ -123,9 +123,9 @@ export default function Login() {
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password" className="text-gray-700 font-semibold">Password</Label>
-                    <a href="#" className="text-sm text-primary hover:text-primary/80 hover:underline font-medium transition-colors">
+                    <Link to="/forgot-password" className="text-sm text-primary hover:text-primary/80 hover:underline font-medium transition-colors">
                       Forgot password?
-                    </a>
+                    </Link>
                   </div>
                   <div className="relative">
                     <Input 
