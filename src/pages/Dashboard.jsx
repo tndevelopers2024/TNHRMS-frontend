@@ -44,6 +44,12 @@ export default function Dashboard() {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${userInfo._id}`);
         const data = await res.json();
+        
+        if (!Array.isArray(data)) {
+          console.error("Backend returned non-array data:", data);
+          return;
+        }
+
         setAttendanceHistory(data);
         
         // Check if there is an active checkin today
