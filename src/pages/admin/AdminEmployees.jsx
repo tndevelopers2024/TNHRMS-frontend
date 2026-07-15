@@ -23,6 +23,7 @@ export default function AdminEmployees() {
   const [selectedDetails, setSelectedDetails] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '',
@@ -136,6 +137,7 @@ export default function AdminEmployees() {
 
   const handleSaveEmployee = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
     try {
       const isEditing = !!editingEmployeeId;
       const url = isEditing 
@@ -163,6 +165,8 @@ export default function AdminEmployees() {
       }
     } catch (err) {
       console.error("Error saving employee:", err);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -306,7 +310,9 @@ export default function AdminEmployees() {
                 
                 <div className="flex justify-end pt-4 border-t border-gray-100 mt-6">
                   <Button type="button" variant="outline" className="mr-2" onClick={() => setShowAddForm(false)}>Cancel</Button>
-                  <Button type="submit">{editingEmployeeId ? "Save Changes" : "Save Employee"}</Button>
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? "Saving..." : (editingEmployeeId ? "Save Changes" : "Save Employee")}
+                  </Button>
                 </div>
               </form>
             </div>
