@@ -1,0 +1,436 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Users, Activity, FileText, Search, Clock } from "lucide-react";
+import toast from "react-hot-toast";
+
+export default function AdminAttendance() {
+  const [activeTab, setActiveTab] = useState('today'); // 'today' or 'reports'
+  const [todayData, setTodayData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Filters for Today's Status
+  const [searchQuery, setSearchQuery] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+
+  // Employee Reports States
+  const [employees, setEmployees] = useState([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [employeeAttendance, setEmployeeAttendance] = useState([]);
+  const [reportTab, setReportTab] = useState('daily'); // 'daily', 'weekly', 'monthly'
+
+  useEffect(() => {
+    fetchTodayAttendance();
+    fetchEmployees();
+  }, []);
+
+  const fetchTodayAttendance = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/attendance/today`);
+      const data = await res.json();
+      setTodayData(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to fetch today's attendance");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees`);
+      const data = await res.json();
+      setEmployees(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchEmployeeAttendance = async (userId) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${userId}`);
+      const data = await res.json();
+      setEmployeeAttendance(data);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to fetch employee attendance");
+    }
+  };
+
+  const handleEmployeeSelect = (e) => {
+    const id = e.target.value;
+    setSelectedEmployeeId(id);
+    if (id) {
+      fetchEmployeeAttendance(id);
+    } else {
+      setEmployeeAttendance([]);
+    }
+  };
+
+  const navigateToReport = (employeeId) => {
+    setSelectedEmployeeId(employeeId);
+    fetchEmployeeAttendance(employeeId);
+    setActiveTab('reports');
+  };
+
+  const departments = [...new Set(employees.map(e => e.department))].filter(Boolean);
+
+  const filteredTodayData = todayData.filter(record => {
+    const matchesSearch = record.employee.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          record.employee.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDept = departmentFilter ? record.employee.department === departmentFilter : true;
+    return matchesSearch && matchesDept;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Attendance Reports</h1>
+          <p className="text-muted-foreground mt-1">Monitor live check-ins and view detailed attendance history.</p>
+        </div>
+        <div className="flex bg-gray-100 p-1 rounded-lg">
+          <button 
+            onClick={() => setActiveTab('today')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'today' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Today's Status
+          </button>
+          <button 
+            onClick={() => setActiveTab('reports')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'reports' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            Employee Reports
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'today' && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="border-b border-gray-100 pb-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <CardTitle>Live Attendance Status</CardTitle>
+                <CardDescription>Real-time view of who is currently working today.</CardDescription>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search employee..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 pl-9"
+                  />
+                </div>
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  className="flex h-9 w-full sm:w-48 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                >
+                  <option value="">All Departments</option>
+                  {departments.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+                <Button onClick={fetchTodayAttendance} variant="outline" size="sm" className="w-full sm:w-auto h-9">
+                  <Clock className="h-4 w-4 mr-2" /> Refresh
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="p-8 text-center text-gray-500 animate-pulse">Loading data...</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">Employee</th>
+                      <th className="px-6 py-4 font-medium">Department</th>
+                      <th className="px-6 py-4 font-medium">Check In</th>
+                      <th className="px-6 py-4 font-medium">Check Out</th>
+                      <th className="px-6 py-4 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredTodayData.length > 0 ? (
+                      filteredTodayData.map((record) => {
+                        const emp = record.employee;
+                        const att = record.attendance;
+                        const isCheckedIn = !!att?.checkInTime;
+                        const isCheckedOut = !!att?.checkOutTime;
+                        const isAutoLeave = att?.status === 'Auto-Leave';
+
+                        let statusBadge = <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gray-100 text-gray-600">Not Checked In</span>;
+                        if (isAutoLeave) {
+                          statusBadge = <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-rose-100 text-rose-700">Leave</span>;
+                        } else if (isCheckedOut) {
+                          statusBadge = <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700">Completed</span>;
+                        } else if (isCheckedIn) {
+                          statusBadge = <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-blue-100 text-blue-700">Working</span>;
+                        }
+
+                        return (
+                          <tr 
+                            key={emp._id} 
+                            onClick={() => navigateToReport(emp._id)}
+                            className="hover:bg-indigo-50/50 cursor-pointer transition-colors group"
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center space-x-3">
+                                <img 
+                                  src={emp.profileImage || `https://api.dicebear.com/7.x/notionists/svg?seed=${emp.name.replace(' ', '')}&backgroundColor=f3f4f6`}
+                                  alt={emp.name} 
+                                  className="w-8 h-8 rounded-full border bg-gray-50"
+                                />
+                                <div>
+                                  <p className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">{emp.name}</p>
+                                  <p className="text-xs text-gray-500">{emp.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-gray-600">{emp.department}</td>
+                            <td className="px-6 py-4 text-gray-600">
+                              {isCheckedIn ? new Date(att.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-gray-600">
+                              {isCheckedOut ? new Date(att.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                            </td>
+                            <td className="px-6 py-4">{statusBadge}</td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                          {searchQuery || departmentFilter ? "No employees match your filters." : "No employees found."}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 'reports' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+          <Card className="border-0 shadow-sm bg-gray-50/50">
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex-1 w-full">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Employee</label>
+                  <select 
+                    value={selectedEmployeeId}
+                    onChange={handleEmployeeSelect}
+                    className="flex h-10 w-full sm:max-w-md rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <option value="">-- Choose an employee --</option>
+                    {employees.map(emp => (
+                      <option key={emp._id} value={emp._id}>{emp.name} ({emp.department})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {selectedEmployeeId ? (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-gray-100">
+                <div className="space-y-1">
+                  <CardTitle>Attendance History</CardTitle>
+                  <CardDescription>Detailed daily logs and summaries for the selected employee.</CardDescription>
+                </div>
+                <div className="flex bg-gray-100/80 p-1 rounded-lg">
+                  <button 
+                    onClick={() => setReportTab('daily')}
+                    className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors ${reportTab === 'daily' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Daily
+                  </button>
+                  <button 
+                    onClick={() => setReportTab('weekly')}
+                    className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors ${reportTab === 'weekly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Weekly
+                  </button>
+                  <button 
+                    onClick={() => setReportTab('monthly')}
+                    className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors ${reportTab === 'monthly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Monthly
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {reportTab === 'daily' ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
+                        <tr>
+                          <th className="px-6 py-4 font-medium">Date</th>
+                          <th className="px-6 py-4 font-medium">Check In</th>
+                          <th className="px-6 py-4 font-medium">Check Out</th>
+                          <th className="px-6 py-4 font-medium">Total Hours</th>
+                          <th className="px-6 py-4 font-medium">Status</th>
+                          <th className="px-6 py-4 font-medium">Summary</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {employeeAttendance.length > 0 ? (
+                          employeeAttendance.map((record) => (
+                            <tr key={record._id} className="hover:bg-gray-50/30 transition-colors">
+                              <td className="px-6 py-4 font-medium text-gray-900">
+                                {new Date(record.date).toLocaleDateString('en-GB')}
+                              </td>
+                              <td className="px-6 py-4 text-gray-600">
+                                {record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                              <td className="px-6 py-4 text-gray-600">
+                                {record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                              <td className="px-6 py-4 font-medium text-primary">
+                                {record.totalHours ? `${record.totalHours}h` : '-'}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                                  record.status === 'Auto-Leave' ? 'bg-rose-100 text-rose-700' : 
+                                  record.checkOutTime ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {record.status === 'Auto-Leave' ? 'Leave' : record.checkOutTime ? 'Present' : 'Working'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-gray-500 max-w-[200px] truncate" title={record.summary || ''}>
+                                {record.summary || '-'}
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="6" className="px-6 py-8 text-center text-gray-500">No attendance history found.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : reportTab === 'weekly' ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
+                        <tr>
+                          <th className="px-6 py-4 font-medium">Week</th>
+                          <th className="px-6 py-4 font-medium">Days Worked</th>
+                          <th className="px-6 py-4 font-medium">Total Hours</th>
+                          <th className="px-6 py-4 font-medium">Average Hours/Day</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(() => {
+                          const weeklyData = employeeAttendance.reduce((acc, curr) => {
+                            const dateObj = new Date(curr.date);
+                            const startOfWeek = new Date(dateObj);
+                            const day = startOfWeek.getDay();
+                            const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+                            startOfWeek.setDate(diff);
+                            const weekLabel = `Week of ${startOfWeek.toLocaleDateString('en-GB')}`;
+                            if (!acc[weekLabel]) {
+                              acc[weekLabel] = { week: weekLabel, daysWorked: 0, totalHours: 0, sortKey: startOfWeek.getTime() };
+                            }
+                            if (curr.checkOutTime) { // Only count completed days
+                              acc[weekLabel].daysWorked += 1;
+                              acc[weekLabel].totalHours += curr.totalHours || 0;
+                            }
+                            return acc;
+                          }, {});
+                          const weeklyArray = Object.values(weeklyData).sort((a, b) => b.sortKey - a.sortKey);
+                          
+                          return weeklyArray.length > 0 ? (
+                            weeklyArray.map((w) => (
+                              <tr key={w.week} className="hover:bg-gray-50/30 transition-colors">
+                                <td className="px-6 py-4 font-medium text-gray-900">{w.week}</td>
+                                <td className="px-6 py-4 text-gray-600">{w.daysWorked} days</td>
+                                <td className="px-6 py-4 font-medium text-primary">{w.totalHours.toFixed(1)}h</td>
+                                <td className="px-6 py-4 text-gray-600">
+                                  {w.daysWorked > 0 ? (w.totalHours / w.daysWorked).toFixed(1) : 0}h
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="4" className="px-6 py-8 text-center text-gray-500">No weekly data available.</td>
+                            </tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
+                        <tr>
+                          <th className="px-6 py-4 font-medium">Month</th>
+                          <th className="px-6 py-4 font-medium">Days Worked</th>
+                          <th className="px-6 py-4 font-medium">Total Hours</th>
+                          <th className="px-6 py-4 font-medium">Average Hours/Day</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(() => {
+                          const monthlyData = employeeAttendance.reduce((acc, curr) => {
+                            const dateObj = new Date(curr.date);
+                            const month = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+                            if (!acc[month]) {
+                              acc[month] = { month, daysWorked: 0, totalHours: 0 };
+                            }
+                            if (curr.checkOutTime) { // Only count completed days
+                              acc[month].daysWorked += 1;
+                              acc[month].totalHours += curr.totalHours || 0;
+                            }
+                            return acc;
+                          }, {});
+                          const monthlyArray = Object.values(monthlyData);
+                          
+                          return monthlyArray.length > 0 ? (
+                            monthlyArray.map((m) => (
+                              <tr key={m.month} className="hover:bg-gray-50/30 transition-colors">
+                                <td className="px-6 py-4 font-medium text-gray-900">{m.month}</td>
+                                <td className="px-6 py-4 text-gray-600">{m.daysWorked} days</td>
+                                <td className="px-6 py-4 font-medium text-primary">{m.totalHours.toFixed(1)}h</td>
+                                <td className="px-6 py-4 text-gray-600">
+                                  {m.daysWorked > 0 ? (m.totalHours / m.daysWorked).toFixed(1) : 0}h
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="4" className="px-6 py-8 text-center text-gray-500">No monthly data available.</td>
+                            </tr>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="p-12 text-center border border-dashed border-gray-200 rounded-2xl bg-white">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900">No Employee Selected</h3>
+              <p className="text-gray-500 mt-1">Please select an employee from the dropdown above to view their reports.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

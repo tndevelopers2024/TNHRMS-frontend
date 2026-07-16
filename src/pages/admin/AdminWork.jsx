@@ -23,6 +23,7 @@ export default function AdminWork() {
   
   // Task form state
   const [taskDescription, setTaskDescription] = useState("");
+  const [isAssigning, setIsAssigning] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editTaskDescription, setEditTaskDescription] = useState("");
 
@@ -87,6 +88,7 @@ export default function AdminWork() {
     e.preventDefault();
     if (!taskDescription.trim()) return;
 
+    setIsAssigning(true);
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/tasks`, {
         method: 'POST',
@@ -109,6 +111,9 @@ export default function AdminWork() {
       }
     } catch (err) {
       console.error("Error assigning task:", err);
+      toast.error('An error occurred while assigning the task');
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -317,8 +322,15 @@ export default function AdminWork() {
                       onChange={(e) => setTaskDescription(e.target.value)}
                     />
                   </div>
-                  <Button type="submit" variant="gradient" className="w-full">
-                    Assign Task
+                  <Button type="submit" variant="gradient" className="w-full flex justify-center items-center" disabled={isAssigning}>
+                    {isAssigning ? (
+                      <>
+                        <div className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Assigning...
+                      </>
+                    ) : (
+                      "Assign Task"
+                    )}
                   </Button>
                 </form>
               </div>

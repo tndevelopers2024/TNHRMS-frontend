@@ -16,7 +16,9 @@ import {
   LogOut,
   ClipboardList,
   CheckSquare,
-  Users
+  Users,
+  Play,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +39,7 @@ const employeeLinks = [
 const adminLinks = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Manage Employees', path: '/admin/employees', icon: Users },
+  { name: 'Attendance Reports', path: '/admin/attendance', icon: Activity },
   { name: 'Work Assignment', path: '/admin/work', icon: ClipboardList },
   { name: 'Leave Approvals', path: '/admin/leaves', icon: CheckSquare },
   { name: 'Manage Holidays', path: '/admin/holidays', icon: CalendarDays },
@@ -49,6 +52,8 @@ function DashboardLayoutContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
   const dropdownRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -77,6 +82,57 @@ function DashboardLayoutContent() {
     window.addEventListener('profileImageUpdated', handleProfileUpdate);
     return () => window.removeEventListener('profileImageUpdated', handleProfileUpdate);
   }, []);
+
+  // Check if user has checked in today
+  useEffect(() => {
+    const checkAttendance = async () => {
+      if (!userInfo || !userInfo._id) return;
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${userInfo._id}`);
+        const data = await res.json();
+        
+        if (Array.isArray(data)) {
+          const now = new Date();
+          const dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+          const todayRecord = data.find(d => d.date === dateStr);
+          
+          if (!todayRecord) {
+            setTimeout(() => {
+              setShowCheckInModal(true);
+            }, 500); // Slight delay for better UX on entry
+          }
+        }
+      } catch (err) {
+        console.error("Error checking attendance status:", err);
+      }
+    };
+    
+    checkAttendance();
+  }, []);
+
+  const handleGlobalCheckIn = async () => {
+    setIsCheckingIn(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/checkin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userInfo._id })
+      });
+      if (res.ok) {
+        toast.success("Checked in successfully!");
+        setShowCheckInModal(false);
+        // Reload to ensure Dashboard or other pages sync their state immediately
+        window.location.reload();
+      } else {
+        toast.error("Failed to check in");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An error occurred");
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
 
   const socket = useSocket();
 
@@ -262,7 +318,10 @@ function DashboardLayoutContent() {
               )}
             </div>
             
-            <div className="flex items-center space-x-3 border-l border-gray-200 pl-4 ml-2">
+            <div 
+              className="flex items-center space-x-3 border-l border-gray-200 pl-4 ml-2 cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition-colors"
+              onClick={() => navigate('/profile')}
+            >
               <div className="hidden md:flex flex-col items-end">
                 <span className="text-sm font-semibold text-gray-900">{userName}</span>
                 <span className="text-xs text-gray-500 capitalize">{role}</span>
@@ -283,6 +342,38 @@ function DashboardLayoutContent() {
           </div>
         </main>
       </div>
+
+      {/* Global Check In Modal */}
+      {showCheckInModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-md p-8 text-center shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <Clock className="w-10 h-10 text-emerald-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Good Morning!</h2>
+            <p className="text-gray-500 mb-8 text-sm">You haven't checked in for today yet. Please check in to start your work session and record your time.</p>
+            <Button 
+              size="lg" 
+              className="w-full h-14 text-lg rounded-xl shadow-md bg-emerald-500 hover:bg-emerald-600 text-white transition-all hover:scale-[1.02]"
+              onClick={handleGlobalCheckIn}
+              disabled={isCheckingIn}
+            >
+              {isCheckingIn ? 'Checking in...' : (
+                <>
+                  <Play className="w-5 h-5 mr-2" />
+                  Check In Now
+                </>
+              )}
+            </Button>
+            <button 
+              className="mt-6 text-sm text-gray-400 hover:text-gray-600 underline underline-offset-4 transition-colors"
+              onClick={() => setShowCheckInModal(false)}
+            >
+              Remind me later
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
