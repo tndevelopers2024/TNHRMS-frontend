@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Activity, FileText, Search, Clock } from "lucide-react";
+import { Users, Activity, FileText, Search, Clock, Download, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
+import { useConfirm } from "../../context/ConfirmContext";
 
 export default function AdminAttendance() {
   const [activeTab, setActiveTab] = useState('today'); // 'today' or 'reports'
   const [todayData, setTodayData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { confirm } = useConfirm();
   
   // Filters for Today's Status
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,6 +20,8 @@ export default function AdminAttendance() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [employeeAttendance, setEmployeeAttendance] = useState([]);
   const [reportTab, setReportTab] = useState('daily'); // 'daily', 'weekly', 'monthly'
+  const [selectedYear, setSelectedYear] = useState('All');
+  const [selectedMonth, setSelectedMonth] = useState('All');
 
   useEffect(() => {
     fetchTodayAttendance();
@@ -75,6 +79,30 @@ export default function AdminAttendance() {
     setActiveTab('reports');
   };
 
+  const handleMarkPresent = async (recordId) => {
+    confirm({
+      title: "Mark as Present",
+      message: "Are you sure you want to mark this employee as present? This will simulate an 8-hour shift and refund any auto-deducted salary.",
+      confirmText: "Mark Present",
+      cancelText: "Cancel",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/attendance/${recordId}/mark-present`, {
+            method: 'PUT'
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message);
+          toast.success("Successfully marked as present.");
+          if (selectedEmployeeId) {
+            fetchEmployeeAttendance(selectedEmployeeId);
+          }
+        } catch (err) {
+          toast.error(err.message || "Failed to mark as present.");
+        }
+      }
+    });
+  };
+
   const departments = [...new Set(employees.map(e => e.department))].filter(Boolean);
 
   const filteredTodayData = todayData.filter(record => {
@@ -83,6 +111,129 @@ export default function AdminAttendance() {
     const matchesDept = departmentFilter ? record.employee.department === departmentFilter : true;
     return matchesSearch && matchesDept;
   });
+
+  const exportTodayCSV = () => {
+    const headers = ['Employee', 'Department', 'Check In', 'Check Out', 'Status'];
+    const rows = filteredTodayData.map(record => {
+      const emp = record.employee;
+      const att = record.attendance;
+      const isCheckedIn = !!att?.checkInTime;
+      const isCheckedOut = !!att?.checkOutTime;
+      const isAutoLeave = att?.status === 'Auto-Leave';
+      
+      let status = 'Not Checked In';
+      if (isAutoLeave) status = 'Leave';
+      else if (isCheckedOut) status = 'Completed';
+      else if (isCheckedIn) status = 'Working';
+      
+      return [
+        `"${emp.name}"`,
+        `"${emp.department}"`,
+        isCheckedIn ? new Date(att.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-',
+        isCheckedOut ? new Date(att.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-',
+        status
+      ];
+    });
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `today_status.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const availableYears = [...new Set(employeeAttendance.map(record => {
+    return new Date(record.date).getFullYear().toString();
+  }))].sort((a, b) => b - a);
+  availableYears.unshift('All');
+
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const availableMonths = ['All', ...months];
+
+  const filteredHistory = employeeAttendance.filter(record => {
+    const recordDate = new Date(record.date);
+    const recordYear = recordDate.getFullYear().toString();
+    const recordMonthName = recordDate.toLocaleString('default', { month: 'long' });
+
+    const yearMatch = selectedYear === 'All' || recordYear === selectedYear;
+    const monthMatch = selectedMonth === 'All' || recordMonthName === selectedMonth;
+
+    return yearMatch && monthMatch;
+  });
+
+  const exportReportCSV = () => {
+    let headers = [];
+    let rows = [];
+
+    if (reportTab === 'daily') {
+      headers = ['Date', 'Check In', 'Check Out', 'Total Hours', 'Status', 'Summary'];
+      rows = filteredHistory.map(record => [
+        new Date(record.date).toLocaleDateString('en-GB'),
+        record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-',
+        record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-',
+        record.totalHours ? `${record.totalHours}h` : '-',
+        record.status === 'Auto-Leave' ? 'Leave' : record.checkOutTime ? 'Present' : 'Working',
+        `"${(record.summary || '').replace(/"/g, '""')}"`
+      ]);
+    } else if (reportTab === 'weekly') {
+      headers = ['Week', 'Days Worked', 'Total Hours', 'Average Hours/Day'];
+      const weeklyData = filteredHistory.reduce((acc, curr) => {
+        const dateObj = new Date(curr.date);
+        const startOfWeek = new Date(dateObj);
+        const day = startOfWeek.getDay();
+        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+        startOfWeek.setDate(diff);
+        const weekLabel = `Week of ${startOfWeek.toLocaleDateString('en-GB')}`;
+        if (!acc[weekLabel]) acc[weekLabel] = { week: weekLabel, daysWorked: 0, totalHours: 0, sortKey: startOfWeek.getTime() };
+        if (curr.checkOutTime) {
+          acc[weekLabel].daysWorked += 1;
+          acc[weekLabel].totalHours += curr.totalHours || 0;
+        }
+        return acc;
+      }, {});
+      rows = Object.values(weeklyData).sort((a, b) => b.sortKey - a.sortKey).map(w => [
+        w.week,
+        w.daysWorked,
+        w.totalHours.toFixed(1),
+        w.daysWorked > 0 ? (w.totalHours / w.daysWorked).toFixed(1) : 0
+      ]);
+    } else {
+      headers = ['Month', 'Days Worked', 'Total Hours', 'Average Hours/Day'];
+      const monthlyData = filteredHistory.reduce((acc, curr) => {
+        const dateObj = new Date(curr.date);
+        const month = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+        if (!acc[month]) acc[month] = { month, daysWorked: 0, totalHours: 0 };
+        if (curr.checkOutTime) {
+          acc[month].daysWorked += 1;
+          acc[month].totalHours += curr.totalHours || 0;
+        }
+        return acc;
+      }, {});
+      rows = Object.values(monthlyData).map(m => [
+        m.month,
+        m.daysWorked,
+        m.totalHours.toFixed(1),
+        m.daysWorked > 0 ? (m.totalHours / m.daysWorked).toFixed(1) : 0
+      ]);
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    
+    // Generate dynamic filename
+    const selectedEmp = employees.find(e => e._id === selectedEmployeeId);
+    const empName = selectedEmp ? selectedEmp.name.replace(/\s+/g, '_') : 'All_Employees';
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute("download", `${empName}_${reportTab}_attendance_${dateStr}.csv`);
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="space-y-6">
@@ -138,6 +289,9 @@ export default function AdminAttendance() {
                 </select>
                 <Button onClick={fetchTodayAttendance} variant="outline" size="sm" className="w-full sm:w-auto h-9">
                   <Clock className="h-4 w-4 mr-2" /> Refresh
+                </Button>
+                <Button onClick={exportTodayCSV} variant="outline" size="sm" className="w-full sm:w-auto h-9 text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+                  <Download className="h-4 w-4 mr-2" /> Export
                 </Button>
               </div>
             </div>
@@ -249,7 +403,31 @@ export default function AdminAttendance() {
                   <CardTitle>Attendance History</CardTitle>
                   <CardDescription>Detailed daily logs and summaries for the selected employee.</CardDescription>
                 </div>
-                <div className="flex bg-gray-100/80 p-1 rounded-lg">
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <select 
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(e.target.value)}
+                      className="flex h-9 w-full sm:w-32 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                    >
+                      {availableYears.map(year => (
+                        <option key={year} value={year}>{year === 'All' ? 'All Years' : year}</option>
+                      ))}
+                    </select>
+                    <select 
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="flex h-9 w-full sm:w-40 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                    >
+                      {availableMonths.map(month => (
+                        <option key={month} value={month}>{month === 'All' ? 'All Months' : month}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button onClick={exportReportCSV} variant="outline" size="sm" className="w-full sm:w-auto h-9 text-emerald-600 border-emerald-200 hover:bg-emerald-50 mr-2">
+                    <Download className="h-4 w-4 mr-2" /> Export
+                  </Button>
+                  <div className="flex bg-gray-100/80 p-1 rounded-lg">
                   <button 
                     onClick={() => setReportTab('daily')}
                     className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-md transition-colors ${reportTab === 'daily' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
@@ -269,6 +447,7 @@ export default function AdminAttendance() {
                     Monthly
                   </button>
                 </div>
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 {reportTab === 'daily' ? (
@@ -282,11 +461,12 @@ export default function AdminAttendance() {
                           <th className="px-6 py-4 font-medium">Total Hours</th>
                           <th className="px-6 py-4 font-medium">Status</th>
                           <th className="px-6 py-4 font-medium">Summary</th>
+                          <th className="px-6 py-4 font-medium text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {employeeAttendance.length > 0 ? (
-                          employeeAttendance.map((record) => (
+                        {filteredHistory.length > 0 ? (
+                          filteredHistory.map((record) => (
                             <tr key={record._id} className="hover:bg-gray-50/30 transition-colors">
                               <td className="px-6 py-4 font-medium text-gray-900">
                                 {new Date(record.date).toLocaleDateString('en-GB')}
@@ -311,6 +491,19 @@ export default function AdminAttendance() {
                               <td className="px-6 py-4 text-gray-500 max-w-[200px] truncate" title={record.summary || ''}>
                                 {record.summary || '-'}
                               </td>
+                              <td className="px-6 py-4 text-right">
+                                {(!record.checkOutTime || record.status === 'Auto-Leave') && (
+                                  <Button 
+                                    onClick={() => handleMarkPresent(record._id)}
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="h-8 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
+                                  >
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Mark Present
+                                  </Button>
+                                )}
+                              </td>
                             </tr>
                           ))
                         ) : (
@@ -334,7 +527,7 @@ export default function AdminAttendance() {
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {(() => {
-                          const weeklyData = employeeAttendance.reduce((acc, curr) => {
+                          const weeklyData = filteredHistory.reduce((acc, curr) => {
                             const dateObj = new Date(curr.date);
                             const startOfWeek = new Date(dateObj);
                             const day = startOfWeek.getDay();
@@ -385,7 +578,7 @@ export default function AdminAttendance() {
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {(() => {
-                          const monthlyData = employeeAttendance.reduce((acc, curr) => {
+                          const monthlyData = filteredHistory.reduce((acc, curr) => {
                             const dateObj = new Date(curr.date);
                             const month = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
                             if (!acc[month]) {

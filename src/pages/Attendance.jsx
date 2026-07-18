@@ -1,284 +1,333 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Clock, Play, Square, Coffee, CheckCircle, Circle, ArrowRightCircle } from "lucide-react";
-import toast from "react-hot-toast";
+import { Download } from "lucide-react";
 
 export default function Attendance() {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [status, setStatus] = useState('before_checkin');
-  const [plannedWork, setPlannedWork] = useState('');
-  const [completedWorkSummary, setCompletedWorkSummary] = useState('');
-  const [checkInTime, setCheckInTime] = useState(null);
-  const [checkOutTime, setCheckOutTime] = useState(null);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  
-  // Task states
-  const [tasks, setTasks] = useState([]);
-  const [taskUpdates, setTaskUpdates] = useState({});
+  const [attendanceHistory, setAttendanceHistory] = useState([]);
+  const [activeTab, setActiveTab] = useState('daily');
+  const [selectedYear, setSelectedYear] = useState('All');
+  const [selectedMonth, setSelectedMonth] = useState('All');
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    const fetchAttendance = async () => {
+      const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+      if (!userInfo || !userInfo._id) return;
+      
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${userInfo._id}`);
+        const data = await res.json();
+        
+        if (Array.isArray(data)) {
+          setAttendanceHistory(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    
+    fetchAttendance();
   }, []);
 
-  useEffect(() => {
-    let interval;
-    if (status === 'working') {
-      interval = setInterval(() => {
-        setTimerSeconds(prev => prev + 1);
-      }, 1000);
+  const availableYears = [...new Set(attendanceHistory.map(record => {
+    return new Date(record.date).getFullYear().toString();
+  }))].sort((a, b) => b - a);
+  availableYears.unshift('All');
+
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const availableMonths = ['All', ...months];
+
+  const filteredHistory = attendanceHistory.filter(record => {
+    const recordDate = new Date(record.date);
+    const recordYear = recordDate.getFullYear().toString();
+    const recordMonthName = recordDate.toLocaleString('default', { month: 'long' });
+
+    const yearMatch = selectedYear === 'All' || recordYear === selectedYear;
+    const monthMatch = selectedMonth === 'All' || recordMonthName === selectedMonth;
+
+    return yearMatch && monthMatch;
+  });
+
+  const exportToCSV = () => {
+    let headers = [];
+    let rows = [];
+
+    if (activeTab === 'daily') {
+      headers = ['Date', 'Check In', 'Check Out', 'Total Hours', 'Status', 'Summary'];
+      rows = filteredHistory.map(record => [
+        new Date(record.date).toLocaleDateString('en-GB'),
+        record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-',
+        record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-',
+        record.totalHours ? `${record.totalHours}h` : '-',
+        record.status === 'Auto-Leave' ? 'Leave' : record.checkOutTime ? 'Present' : 'Working',
+        `"${(record.summary || '').replace(/"/g, '""')}"`
+      ]);
+    } else if (activeTab === 'weekly') {
+      headers = ['Week', 'Days Worked', 'Total Hours', 'Average Hours/Day'];
+      const weeklyData = filteredHistory.reduce((acc, curr) => {
+        const dateObj = new Date(curr.date);
+        const startOfWeek = new Date(dateObj);
+        const day = startOfWeek.getDay();
+        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+        startOfWeek.setDate(diff);
+        const weekLabel = `Week of ${startOfWeek.toLocaleDateString('en-GB')}`;
+        if (!acc[weekLabel]) acc[weekLabel] = { week: weekLabel, daysWorked: 0, totalHours: 0, sortKey: startOfWeek.getTime() };
+        if (curr.checkOutTime) {
+          acc[weekLabel].daysWorked += 1;
+          acc[weekLabel].totalHours += curr.totalHours || 0;
+        }
+        return acc;
+      }, {});
+      rows = Object.values(weeklyData).sort((a, b) => b.sortKey - a.sortKey).map(w => [
+        w.week,
+        w.daysWorked,
+        w.totalHours.toFixed(1),
+        w.daysWorked > 0 ? (w.totalHours / w.daysWorked).toFixed(1) : 0
+      ]);
+    } else {
+      headers = ['Month', 'Days Worked', 'Total Hours', 'Average Hours/Day'];
+      const monthlyData = filteredHistory.reduce((acc, curr) => {
+        const dateObj = new Date(curr.date);
+        const month = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+        if (!acc[month]) acc[month] = { month, daysWorked: 0, totalHours: 0 };
+        if (curr.checkOutTime) {
+          acc[month].daysWorked += 1;
+          acc[month].totalHours += curr.totalHours || 0;
+        }
+        return acc;
+      }, {});
+      rows = Object.values(monthlyData).map(m => [
+        m.month,
+        m.daysWorked,
+        m.totalHours.toFixed(1),
+        m.daysWorked > 0 ? (m.totalHours / m.daysWorked).toFixed(1) : 0
+      ]);
     }
-    return () => clearInterval(interval);
-  }, [status]);
 
-  const fetchTasks = async () => {
-    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-    if (!userInfo || !userInfo.id) return;
-    
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/tasks/${userInfo.id}`);
-      const data = await res.json();
-      setTasks(data);
-      
-      // Initialize taskUpdates with current statuses
-      const initialUpdates = {};
-      data.forEach(t => {
-        initialUpdates[t._id] = t.status;
-      });
-      setTaskUpdates(initialUpdates);
-    } catch (err) {
-      console.error("Error fetching tasks:", err);
-    }
-  };
-
-  const formatTime = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const handleCheckIn = () => {
-    if (!plannedWork.trim()) {
-      toast.error("Please enter your planned work before checking in.");
-      return;
-    }
-    setCheckInTime(new Date());
-    setStatus('working');
-  };
-
-  const handleInitCheckOut = () => {
-    fetchTasks();
-    setStatus('before_checkout');
-  };
-
-  const handleTaskStatusChange = (taskId, newStatus) => {
-    setTaskUpdates(prev => ({ ...prev, [taskId]: newStatus }));
-  };
-
-  const handleFinalCheckOut = async () => {
-    if (!completedWorkSummary.trim()) {
-      toast.error("Please provide a summary in the text area.");
-      return;
-    }
-
-    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-    
-    try {
-      // 1. Update task statuses
-      const updatesArray = Object.keys(taskUpdates).map(id => ({
-        id,
-        status: taskUpdates[id]
-      }));
-      
-      await fetch(`${import.meta.env.VITE_API_URL}/api/employee/tasks/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskUpdates: updatesArray })
-      });
-
-      // 2. Submit checkout summary
-      await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: userInfo.id, 
-          summary: completedWorkSummary 
-        })
-      });
-
-      setCheckOutTime(new Date());
-      setStatus('completed');
-    } catch (err) {
-      console.error("Error during checkout:", err);
-      toast.error("Failed to checkout. Please try again.");
-    }
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `my_attendance_${activeTab}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Attendance</h1>
-        <p className="text-muted-foreground mt-1">Manage your daily work log and check-ins.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Attendance History</h1>
+        <p className="text-muted-foreground mt-1">View your daily logs and monthly summaries.</p>
       </div>
 
-      {/* Top Card: Live Clock */}
-      <Card className="border-0 shadow-sm bg-gradient-to-r from-primary/5 to-secondary/5">
-        <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-primary uppercase tracking-wider mb-1">
-              {currentTime.toLocaleDateString('en-GB')}
-            </p>
-            <div className="flex items-center space-x-3 text-4xl md:text-5xl font-bold text-gray-900 tracking-tight">
-              <Clock className="w-10 h-10 text-primary" />
-              <span>
-                {currentTime.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
+      <div className="mt-8">
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="flex flex-col lg:flex-row items-start lg:items-center justify-between pb-4 border-b border-gray-100 gap-4">
+            <div className="space-y-1">
+              <CardTitle>Attendance History</CardTitle>
+              <CardDescription>View your daily logs and monthly summaries.</CardDescription>
             </div>
-          </div>
-          
-          <div className="mt-6 md:mt-0 text-right">
-            {status === 'working' || status === 'before_checkout' ? (
-              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center min-w-[200px]">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-1">Current Session</p>
-                <div className="text-3xl font-bold text-primary font-mono">{formatTime(timerSeconds)}</div>
-                <p className="text-xs text-emerald-500 font-medium mt-1 flex items-center">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
-                  Active
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Interactive Actions Area */}
-      <Card className="border-0 shadow-sm overflow-hidden">
-        {status === 'before_checkin' && (
-          <div className="p-8 space-y-6">
-            <div className="space-y-4">
-              <Label className="text-lg font-semibold text-gray-900">What work are you planning to complete today?</Label>
-              <Textarea 
-                placeholder="Example:&#10;- Fix login page bugs&#10;- Complete API integration&#10;- Client meeting at 3 PM" 
-                className="text-base p-4 bg-gray-50/50"
-                value={plannedWork}
-                onChange={(e) => setPlannedWork(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end">
-              <Button size="lg" className="w-full md:w-auto h-14 px-10 text-lg rounded-xl shadow-md bg-emerald-500 hover:bg-emerald-600 text-white" onClick={handleCheckIn}>
-                <Play className="w-5 h-5 mr-2" />
-                Check In Now
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {status === 'working' && (
-          <div className="p-8 flex flex-col items-center justify-center space-y-8 py-16">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-gray-900">You are checked in</h2>
-              <p className="text-muted-foreground">Checked in at {checkInTime?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md justify-center">
-              <Button size="lg" variant="outline" className="flex-1 h-14 rounded-xl border-gray-200">
-                <Coffee className="w-5 h-5 mr-2 text-amber-500" />
-                Take Break
-              </Button>
-              <Button size="lg" variant="destructive" className="flex-1 h-14 rounded-xl shadow-md bg-rose-500 hover:bg-rose-600" onClick={handleInitCheckOut}>
-                <Square className="w-5 h-5 mr-2" />
-                Check Out
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {status === 'before_checkout' && (
-          <div className="p-8 space-y-8 bg-rose-50/30">
-            <div>
-              <Label className="text-lg font-semibold text-gray-900">Update Assigned Tasks</Label>
-              <p className="text-sm text-muted-foreground mb-4">Please update the status of the work assigned to you.</p>
-              
-              {tasks.length > 0 ? (
-                <div className="space-y-3 bg-white p-4 rounded-xl border border-gray-100">
-                  {tasks.map(task => (
-                    <div key={task._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50 gap-3">
-                      <p className="text-sm font-medium text-gray-800 flex-1">{task.description}</p>
-                      <select 
-                        value={taskUpdates[task._id] || task.status}
-                        onChange={(e) => handleTaskStatusChange(task._id, e.target.value)}
-                        className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary w-full sm:w-40"
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                      </select>
-                    </div>
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <select 
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  className="flex h-9 w-full sm:w-32 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                >
+                  {availableYears.map(year => (
+                    <option key={year} value={year}>{year === 'All' ? 'All Years' : year}</option>
                   ))}
-                </div>
-              ) : (
-                <div className="p-4 bg-white rounded-xl border border-dashed border-gray-200 text-center text-gray-500 text-sm">
-                  You have no assigned tasks.
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <Label className="text-lg font-semibold text-gray-900">End of Day Summary</Label>
-              <Textarea 
-                placeholder="Briefly describe what you worked on or completed today..." 
-                className="text-base p-4 bg-white"
-                value={completedWorkSummary}
-                onChange={(e) => setCompletedWorkSummary(e.target.value)}
-              />
-            </div>
-            
-            <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200/60">
-              <Button size="lg" variant="ghost" onClick={() => setStatus('working')} className="text-gray-500">
-                Cancel
+                </select>
+                <select 
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="flex h-9 w-full sm:w-40 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                >
+                  {availableMonths.map(month => (
+                    <option key={month} value={month}>{month === 'All' ? 'All Months' : month}</option>
+                  ))}
+                </select>
+              </div>
+              <Button onClick={exportToCSV} variant="outline" size="sm" className="w-full sm:w-auto h-9 text-emerald-600 border-emerald-200 hover:bg-emerald-50 mr-2">
+                <Download className="h-4 w-4 mr-2" /> Export
               </Button>
-              <Button size="lg" variant="destructive" className="w-full md:w-auto h-14 px-10 text-lg rounded-xl shadow-md bg-rose-500 hover:bg-rose-600" onClick={handleFinalCheckOut}>
-                Submit & Check Out
-              </Button>
+              <div className="flex bg-gray-100/80 p-1 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                <button 
+                onClick={() => setActiveTab('daily')}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'daily' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Daily Log
+              </button>
+              <button 
+                onClick={() => setActiveTab('weekly')}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'weekly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Weekly Summary
+              </button>
+              <button 
+                onClick={() => setActiveTab('monthly')}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'monthly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Monthly Summary
+              </button>
             </div>
-          </div>
-        )}
-
-        {status === 'completed' && (
-          <div className="p-8 text-center space-y-6 py-12">
-            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle className="w-10 h-10 text-emerald-600" />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-gray-900">Great Job Today!</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">You've successfully logged your work and checked out. Have a good rest!</p>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-8 border-t border-gray-100">
-              <div className="p-4 bg-gray-50 rounded-2xl">
-                <p className="text-xs text-muted-foreground uppercase">Check In</p>
-                <p className="text-lg font-semibold mt-1">{checkInTime?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</p>
+          </CardHeader>
+          <CardContent className="p-0">
+            {activeTab === 'daily' ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">Date</th>
+                      <th className="px-6 py-4 font-medium">Check In</th>
+                      <th className="px-6 py-4 font-medium">Check Out</th>
+                      <th className="px-6 py-4 font-medium">Total Hours</th>
+                      <th className="px-6 py-4 font-medium">Status</th>
+                      <th className="px-6 py-4 font-medium">Summary</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredHistory.length > 0 ? (
+                      filteredHistory.map((record) => (
+                        <tr key={record._id} className="hover:bg-gray-50/30 transition-colors">
+                          <td className="px-6 py-4 font-medium text-gray-900">
+                            {new Date(record.date).toLocaleDateString('en-GB')}
+                          </td>
+                          <td className="px-6 py-4 text-gray-600">
+                            {record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-gray-600">
+                            {record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                          </td>
+                          <td className="px-6 py-4 font-medium text-primary">
+                            {record.totalHours ? `${record.totalHours}h` : '-'}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                              record.status === 'Auto-Leave' ? 'bg-rose-100 text-rose-700' : 
+                              record.status === 'Half-Day Leave' ? 'bg-amber-100 text-amber-700' :
+                              record.checkOutTime ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {record.status === 'Auto-Leave' ? 'Leave' : record.status === 'Half-Day Leave' ? 'Half Day' : record.checkOutTime ? 'Present' : 'Working'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-gray-500 max-w-[250px] truncate" title={record.summary || ''}>
+                            {record.summary || '-'}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">No attendance history found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <div className="p-4 bg-gray-50 rounded-2xl">
-                <p className="text-xs text-muted-foreground uppercase">Check Out</p>
-                <p className="text-lg font-semibold mt-1">{checkOutTime?.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</p>
+            ) : activeTab === 'weekly' ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">Week</th>
+                      <th className="px-6 py-4 font-medium">Days Worked</th>
+                      <th className="px-6 py-4 font-medium">Total Hours</th>
+                      <th className="px-6 py-4 font-medium">Average Hours/Day</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(() => {
+                      const weeklyData = filteredHistory.reduce((acc, curr) => {
+                        const dateObj = new Date(curr.date);
+                        const startOfWeek = new Date(dateObj);
+                        const day = startOfWeek.getDay();
+                        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+                        startOfWeek.setDate(diff);
+                        const weekLabel = `Week of ${startOfWeek.toLocaleDateString('en-GB')}`;
+                        if (!acc[weekLabel]) {
+                          acc[weekLabel] = { week: weekLabel, daysWorked: 0, totalHours: 0, sortKey: startOfWeek.getTime() };
+                        }
+                        if (curr.checkOutTime) { // Only count completed days
+                          acc[weekLabel].daysWorked += 1;
+                          acc[weekLabel].totalHours += curr.totalHours || 0;
+                        }
+                        return acc;
+                      }, {});
+                      const weeklyArray = Object.values(weeklyData).sort((a, b) => b.sortKey - a.sortKey);
+                      
+                      return weeklyArray.length > 0 ? (
+                        weeklyArray.map((w) => (
+                          <tr key={w.week} className="hover:bg-gray-50/30 transition-colors">
+                            <td className="px-6 py-4 font-medium text-gray-900">{w.week}</td>
+                            <td className="px-6 py-4 text-gray-600">{w.daysWorked} days</td>
+                            <td className="px-6 py-4 font-medium text-primary">{w.totalHours.toFixed(1)}h</td>
+                            <td className="px-6 py-4 text-gray-600">
+                              {w.daysWorked > 0 ? (w.totalHours / w.daysWorked).toFixed(1) : 0}h
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="4" className="px-6 py-8 text-center text-gray-500">No weekly data available.</td>
+                        </tr>
+                      );
+                    })()}
+                  </tbody>
+                </table>
               </div>
-              <div className="p-4 bg-gray-50 rounded-2xl">
-                <p className="text-xs text-muted-foreground uppercase">Total Hours</p>
-                <p className="text-lg font-semibold mt-1">{formatTime(timerSeconds)}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">Month</th>
+                      <th className="px-6 py-4 font-medium">Days Worked</th>
+                      <th className="px-6 py-4 font-medium">Total Hours</th>
+                      <th className="px-6 py-4 font-medium">Average Hours/Day</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(() => {
+                      const monthlyData = filteredHistory.reduce((acc, curr) => {
+                        const dateObj = new Date(curr.date);
+                        const month = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+                        if (!acc[month]) {
+                          acc[month] = { month, daysWorked: 0, totalHours: 0 };
+                        }
+                        if (curr.checkOutTime) { // Only count completed days
+                          acc[month].daysWorked += 1;
+                          acc[month].totalHours += curr.totalHours || 0;
+                        }
+                        return acc;
+                      }, {});
+                      const monthlyArray = Object.values(monthlyData);
+                      
+                      return monthlyArray.length > 0 ? (
+                        monthlyArray.map((m) => (
+                          <tr key={m.month} className="hover:bg-gray-50/30 transition-colors">
+                            <td className="px-6 py-4 font-medium text-gray-900">{m.month}</td>
+                            <td className="px-6 py-4 text-gray-600">{m.daysWorked} days</td>
+                            <td className="px-6 py-4 font-medium text-primary">{m.totalHours.toFixed(1)}h</td>
+                            <td className="px-6 py-4 text-gray-600">
+                              {m.daysWorked > 0 ? (m.totalHours / m.daysWorked).toFixed(1) : 0}h
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="4" className="px-6 py-8 text-center text-gray-500">No monthly data available.</td>
+                        </tr>
+                      );
+                    })()}
+                  </tbody>
+                </table>
               </div>
-              <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
-                <p className="text-xs text-primary uppercase font-semibold">Productivity</p>
-                <p className="text-lg font-bold text-primary mt-1">Excellent</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
-  )
+  );
 }

@@ -20,6 +20,7 @@ import AdminPayroll from './pages/admin/AdminPayroll';
 import Settings from './pages/Settings';
 import ComingSoon from './pages/ComingSoon';
 import DailyWorkLog from './pages/DailyWorkLog';
+import Attendance from './pages/Attendance';
 
 import { Toaster } from 'react-hot-toast';
 import { ConfirmProvider } from './context/ConfirmContext';
@@ -86,6 +87,7 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="work-log" element={<DailyWorkLog />} />
+            <Route path="attendance" element={<Attendance />} />
             <Route path="leaves" element={<Leaves />} />
             <Route path="payslips" element={<Payslips />} />
             <Route path="holidays" element={<Holidays />} />

@@ -28,8 +28,9 @@ import { toast } from 'react-hot-toast';
 const employeeLinks = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Daily Work Log', path: '/work-log', icon: Clock },
+  { name: 'Attendance History', path: '/attendance', icon: Activity },
   { name: 'Leave Management', path: '/leaves', icon: FileText },
-  { name: 'Payslips', path: '/payslips', icon: Wallet },
+  // { name: 'Payslips', path: '/payslips', icon: Wallet },
   { name: 'Holidays', path: '/holidays', icon: CalendarDays },
   { name: 'Calendar', path: '/calendar', icon: Calendar },
   { name: 'Profile', path: '/profile', icon: User },
@@ -38,6 +39,7 @@ const employeeLinks = [
 
 const adminLinks = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { name: 'My Attendance', path: '/attendance', icon: Activity },
   { name: 'Manage Employees', path: '/admin/employees', icon: Users },
   { name: 'Attendance Reports', path: '/admin/attendance', icon: Activity },
   { name: 'Work Assignment', path: '/admin/work', icon: ClipboardList },
@@ -109,6 +111,71 @@ function DashboardLayoutContent() {
     
     checkAttendance();
   }, []);
+
+  // Fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/notifications`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data);
+        }
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+    fetchNotifications();
+    // Poll every minute
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${import.meta.env.VITE_API_URL}/api/notifications/read-all`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(n => ({...n, read: true})));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleNotificationClick = async (notif) => {
+    if (!notif.read) {
+      try {
+        const token = localStorage.getItem('token');
+        await fetch(`${import.meta.env.VITE_API_URL}/api/notifications/${notif._id}/read`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        setNotifications(prev => prev.map(n => n._id === notif._id ? {...n, read: true} : n));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    setShowNotifications(false);
+    
+    // Route based on type
+    if (notif.type === 'profile_update') {
+      if (role === 'admin') navigate('/admin/employees');
+      else navigate('/profile');
+    }
+    if (role === 'admin') {
+      if (notif.type === 'leave_application') navigate('/admin/leaves');
+      else if (notif.type === 'task_update') navigate('/admin/work');
+    } else {
+      if (notif.type === 'task') navigate('/work-log');
+      else if (notif.type === 'leave') navigate('/leaves');
+    }
+  };
 
   const handleGlobalCheckIn = async () => {
     setIsCheckingIn(true);
@@ -183,19 +250,6 @@ function DashboardLayoutContent() {
     };
   }, []);
 
-  const handleNotificationClick = (notif) => {
-    // Mark as read
-    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
-    setShowNotifications(false); // Close dropdown
-
-    if (role === 'admin') {
-      if (notif.type === 'leave_application') navigate('/admin/leaves');
-      else if (notif.type === 'task_update') navigate('/admin/work');
-    } else {
-      if (notif.type === 'task') navigate('/work-log');
-      else if (notif.type === 'leave') navigate('/leaves');
-    }
-  };
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans">
@@ -287,9 +341,9 @@ function DashboardLayoutContent() {
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                     <h3 className="font-semibold text-gray-900">Notifications</h3>
-                    {notifications.length > 0 && (
+                    {notifications.length > 0 && notifications.some(n => !n.read) && (
                       <button 
-                        onClick={() => setNotifications(prev => prev.map(n => ({...n, read: true})))}
+                        onClick={handleMarkAllRead}
                         className="text-xs text-primary hover:underline"
                       >
                         Mark all as read
@@ -302,13 +356,14 @@ function DashboardLayoutContent() {
                     ) : (
                       notifications.map(notif => (
                         <div 
-                          key={notif.id} 
+                          key={notif._id || notif.id} 
                           onClick={() => handleNotificationClick(notif)}
                           className={`p-4 border-b border-gray-50 hover:bg-gray-100 transition-colors cursor-pointer ${!notif.read ? 'bg-primary/5' : ''}`}
                         >
+                          <p className="text-sm font-semibold text-gray-900 mb-1">{notif.title}</p>
                           <p className="text-sm text-gray-800">{notif.message}</p>
                           <span className="text-xs text-gray-400 mt-1 block">
-                            {notif.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(notif.createdAt || notif.time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                           </span>
                         </div>
                       ))
@@ -337,7 +392,7 @@ function DashboardLayoutContent() {
 
         {/* Main Content scrollable area */}
         <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-background scroll-smooth">
-          <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>
         </main>

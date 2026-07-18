@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, Clock, CalendarDays, FileText, ChevronRight, Play, Square, Coffee, CheckCircle, Circle, ArrowRightCircle, X } from "lucide-react";
+import { Users, Clock, CalendarDays, FileText, ChevronRight, Play, Square, Coffee, CheckCircle, Circle, ArrowRightCircle, X, Loader2, AlertTriangle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,9 @@ export default function Dashboard() {
   const [checkInTime, setCheckInTime] = useState(null);
   const [checkOutTime, setCheckOutTime] = useState(null);
   const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [showEarlyCheckoutWarning, setShowEarlyCheckoutWarning] = useState(null);
   
   // Task states
   const [tasks, setTasks] = useState([]);
@@ -26,6 +29,9 @@ export default function Dashboard() {
 
   // Leaves
   const [leaves, setLeaves] = useState([]);
+  
+  // Holiday
+  const [upcomingHoliday, setUpcomingHoliday] = useState(null);
 
   // Announcements & Payslip
   const [announcements, setAnnouncements] = useState([]);
@@ -109,9 +115,22 @@ export default function Dashboard() {
       }
     };
 
+    const fetchUpcomingHoliday = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/holidays/upcoming`);
+        if (res.ok) {
+          const data = await res.json();
+          setUpcomingHoliday(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     fetchLeaves();
     fetchAnnouncements();
     fetchPayslip();
+    fetchUpcomingHoliday();
   }, []);
 
   useEffect(() => {
@@ -152,6 +171,7 @@ export default function Dashboard() {
   };
 
   const handleCheckIn = async () => {
+    setIsCheckingIn(true);
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/checkin`, {
@@ -171,12 +191,25 @@ export default function Dashboard() {
     } catch (err) {
       console.error(err);
       toast.error("Failed to check in");
+    } finally {
+      setIsCheckingIn(false);
     }
   };
 
-  const handleInitCheckOut = () => {
+  const proceedToCheckout = () => {
+    setShowEarlyCheckoutWarning(null);
     fetchTasks();
     setStatus('before_checkout');
+  };
+
+  const handleInitCheckOut = () => {
+    if (timerSeconds < 14400) {
+      setShowEarlyCheckoutWarning('full_leave');
+    } else if (timerSeconds < 28800) {
+      setShowEarlyCheckoutWarning('half_day_leave');
+    } else {
+      proceedToCheckout();
+    }
   };
 
   const handleTaskStatusChange = (taskId, newStatus) => {
@@ -184,26 +217,15 @@ export default function Dashboard() {
   };
 
   const handleFinalCheckOut = async () => {
-    if (!completedWorkSummary.trim()) {
-      toast.error("Please provide a summary in the text area.");
+    if (!completedWorkSummary || completedWorkSummary.trim().length < 50) {
+      toast.error("Please provide a summary of at least 50 characters.");
       return;
     }
 
+    setIsCheckingOut(true);
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
     
     try {
-      // 1. Update task statuses
-      const updatesArray = Object.keys(taskUpdates).map(id => ({
-        id,
-        status: taskUpdates[id]
-      }));
-      
-      await fetch(`${import.meta.env.VITE_API_URL}/api/employee/tasks/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskUpdates: updatesArray })
-      });
-
       // 2. Submit checkout summary
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/checkout`, {
         method: 'POST',
@@ -225,6 +247,8 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Error during checkout:", err);
       toast.error("Failed to checkout. Please try again.");
+    } finally {
+      setIsCheckingOut(false);
     }
   };
 
@@ -283,6 +307,9 @@ export default function Dashboard() {
        if (record.status === 'Auto-Leave') {
            stats['Casual Leave'].used += 1;
            stats['Casual Leave'].available -= 1;
+       } else if (record.status === 'Half-Day Leave') {
+           stats['Casual Leave'].used += 0.5;
+           stats['Casual Leave'].available -= 0.5;
        }
     });
 
@@ -317,16 +344,16 @@ export default function Dashboard() {
     },
     { 
       title: "Leave Balance", 
-      value: `${27 - totalLeavesUsed} Days`, 
-      subtitle: "Total available (27 yearly)", 
+      value: `${35 - totalLeavesUsed} Days`, 
+      subtitle: "Total available (35 yearly)", 
       icon: FileText,
       color: "text-amber-500",
       bg: "bg-amber-50"
     },
     { 
       title: "Upcoming Holiday", 
-      value: "Independence", 
-      subtitle: "Aug 15, 2026", 
+      value: upcomingHoliday ? upcomingHoliday.name : "No Holidays", 
+      subtitle: upcomingHoliday ? new Date(upcomingHoliday.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Check back later", 
       icon: CalendarDays,
       color: "text-secondary",
       bg: "bg-secondary/10"
@@ -360,9 +387,9 @@ export default function Dashboard() {
           
           <div className="mt-6 md:mt-0 flex flex-wrap justify-end items-center gap-4">
             {status === 'before_checkin' && (
-              <Button size="lg" className="h-14 px-10 text-lg rounded-xl shadow-md bg-emerald-500 hover:bg-emerald-600 text-white transition-transform hover:scale-105" onClick={handleCheckIn}>
-                <Play className="w-5 h-5 mr-2" />
-                Check In Now
+              <Button size="lg" className="h-14 px-10 text-lg rounded-xl shadow-md bg-emerald-500 hover:bg-emerald-600 text-white transition-transform hover:scale-105" onClick={handleCheckIn} disabled={isCheckingIn}>
+                {isCheckingIn ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Play className="w-5 h-5 mr-2" />}
+                {isCheckingIn ? "Checking In..." : "Check In Now"}
               </Button>
             )}
 
@@ -425,10 +452,37 @@ export default function Dashboard() {
       </Card>
       )}
 
+      {/* Early Checkout Warning Modal */}
+      {showEarlyCheckoutWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 mt-2">
+                <AlertTriangle className="w-8 h-8 text-amber-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Early Check-Out Warning</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed px-2">
+                {showEarlyCheckoutWarning === 'full_leave' 
+                  ? "You have worked less than 4 hours. Checking out now will be considered a Full Leave. Are you sure you want to proceed?" 
+                  : "You have worked less than 8 hours. Checking out now will be considered a Half-Day Leave. Are you sure you want to proceed?"}
+              </p>
+            </div>
+            <div className="flex bg-gray-50/80 border-t border-gray-100 p-5 gap-3 mt-4">
+              <Button size="lg" variant="ghost" onClick={() => setShowEarlyCheckoutWarning(null)} className="flex-1 text-gray-500 hover:text-gray-900 hover:bg-gray-200 h-12 rounded-xl text-base">
+                Cancel
+              </Button>
+              <Button size="lg" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white shadow-md h-12 rounded-xl text-base" onClick={proceedToCheckout}>
+                Proceed Anyway
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Checkout Modal */}
       {status === 'before_checkout' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-rose-50/30">
               <h2 className="text-xl font-bold text-gray-900">End of Day Check-Out</h2>
               <Button variant="ghost" size="icon" onClick={() => setStatus('working')} className="text-gray-500 hover:text-gray-900">
@@ -437,34 +491,6 @@ export default function Dashboard() {
             </div>
             
             <div className="p-6 overflow-y-auto space-y-8 flex-1">
-              <div>
-                <Label className="text-lg font-semibold text-gray-900">Update Assigned Tasks</Label>
-                <p className="text-sm text-muted-foreground mb-4">Please update the status of the work assigned to you.</p>
-                
-                {tasks.length > 0 ? (
-                  <div className="space-y-3 bg-white p-4 rounded-xl border border-gray-100">
-                    {tasks.map(task => (
-                      <div key={task._id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50 gap-3">
-                        <p className="text-sm font-medium text-gray-800 flex-1">{task.description}</p>
-                        <select 
-                          value={taskUpdates[task._id] || task.status}
-                          onChange={(e) => handleTaskStatusChange(task._id, e.target.value)}
-                          className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary w-full sm:w-40"
-                        >
-                          <option value="Pending">Pending</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Completed">Completed</option>
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 bg-white rounded-xl border border-dashed border-gray-200 text-center text-gray-500 text-sm">
-                    You have no assigned tasks.
-                  </div>
-                )}
-              </div>
-
               <div className="space-y-4">
                 <Label className="text-lg font-semibold text-gray-900">End of Day Summary</Label>
                 <Textarea 
@@ -477,11 +503,12 @@ export default function Dashboard() {
             </div>
 
             <div className="flex justify-end space-x-4 p-6 border-t border-gray-100 bg-gray-50/50">
-              <Button size="lg" variant="ghost" onClick={() => setStatus('working')} className="text-gray-500">
+              <Button size="lg" variant="ghost" onClick={() => setStatus('working')} className="text-gray-500" disabled={isCheckingOut}>
                 Cancel
               </Button>
-              <Button size="lg" variant="destructive" className="w-full md:w-auto h-12 px-8 text-base rounded-xl shadow-md bg-rose-500 hover:bg-rose-600" onClick={handleFinalCheckOut}>
-                Submit & Check Out
+              <Button size="lg" variant="destructive" className="w-full md:w-auto h-12 px-8 text-base rounded-xl shadow-md bg-rose-500 hover:bg-rose-600" onClick={handleFinalCheckOut} disabled={isCheckingOut}>
+                {isCheckingOut ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : null}
+                {isCheckingOut ? "Submitting..." : "Submit & Check Out"}
               </Button>
             </div>
           </div>
@@ -567,189 +594,6 @@ export default function Dashboard() {
         </Card>
 
 
-      </div>
-
-      {/* Attendance History */}
-      <div className="mt-8">
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-gray-100">
-            <div className="space-y-1">
-              <CardTitle>Attendance History</CardTitle>
-              <CardDescription>View your daily logs and monthly summaries.</CardDescription>
-            </div>
-            <div className="flex bg-gray-100/80 p-1 rounded-lg">
-              <button 
-                onClick={() => setActiveTab('daily')}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'daily' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Daily Log
-              </button>
-              <button 
-                onClick={() => setActiveTab('weekly')}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'weekly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Weekly Summary
-              </button>
-              <button 
-                onClick={() => setActiveTab('monthly')}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === 'monthly' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Monthly Summary
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {activeTab === 'daily' ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
-                    <tr>
-                      <th className="px-6 py-4 font-medium">Date</th>
-                      <th className="px-6 py-4 font-medium">Check In</th>
-                      <th className="px-6 py-4 font-medium">Check Out</th>
-                      <th className="px-6 py-4 font-medium">Total Hours</th>
-                      <th className="px-6 py-4 font-medium">Status</th>
-                      <th className="px-6 py-4 font-medium">Summary</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {attendanceHistory.length > 0 ? (
-                      attendanceHistory.map((record) => (
-                        <tr key={record._id} className="hover:bg-gray-50/30 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-900">
-                            {new Date(record.date).toLocaleDateString('en-GB')}
-                          </td>
-                          <td className="px-6 py-4 text-gray-600">
-                            {record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-gray-600">
-                            {record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
-                          </td>
-                          <td className="px-6 py-4 font-medium text-primary">
-                            {record.totalHours ? `${record.totalHours}h` : '-'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                              record.status === 'Auto-Leave' ? 'bg-rose-100 text-rose-700' : 
-                              record.checkOutTime ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {record.status === 'Auto-Leave' ? 'Leave' : record.checkOutTime ? 'Present' : 'Working'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-gray-500 max-w-[250px] truncate" title={record.summary || ''}>
-                            {record.summary || '-'}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-8 text-center text-gray-500">No attendance history found.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : activeTab === 'weekly' ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
-                    <tr>
-                      <th className="px-6 py-4 font-medium">Week</th>
-                      <th className="px-6 py-4 font-medium">Days Worked</th>
-                      <th className="px-6 py-4 font-medium">Total Hours</th>
-                      <th className="px-6 py-4 font-medium">Average Hours/Day</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(() => {
-                      const weeklyData = attendanceHistory.reduce((acc, curr) => {
-                        const dateObj = new Date(curr.date);
-                        const startOfWeek = new Date(dateObj);
-                        const day = startOfWeek.getDay();
-                        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
-                        startOfWeek.setDate(diff);
-                        const weekLabel = `Week of ${startOfWeek.toLocaleDateString('en-GB')}`;
-                        if (!acc[weekLabel]) {
-                          acc[weekLabel] = { week: weekLabel, daysWorked: 0, totalHours: 0, sortKey: startOfWeek.getTime() };
-                        }
-                        if (curr.checkOutTime) { // Only count completed days
-                          acc[weekLabel].daysWorked += 1;
-                          acc[weekLabel].totalHours += curr.totalHours || 0;
-                        }
-                        return acc;
-                      }, {});
-                      const weeklyArray = Object.values(weeklyData).sort((a, b) => b.sortKey - a.sortKey);
-                      
-                      return weeklyArray.length > 0 ? (
-                        weeklyArray.map((w) => (
-                          <tr key={w.week} className="hover:bg-gray-50/30 transition-colors">
-                            <td className="px-6 py-4 font-medium text-gray-900">{w.week}</td>
-                            <td className="px-6 py-4 text-gray-600">{w.daysWorked} days</td>
-                            <td className="px-6 py-4 font-medium text-primary">{w.totalHours.toFixed(1)}h</td>
-                            <td className="px-6 py-4 text-gray-600">
-                              {w.daysWorked > 0 ? (w.totalHours / w.daysWorked).toFixed(1) : 0}h
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="4" className="px-6 py-8 text-center text-gray-500">No weekly data available.</td>
-                        </tr>
-                      );
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-muted-foreground uppercase bg-gray-50/50">
-                    <tr>
-                      <th className="px-6 py-4 font-medium">Month</th>
-                      <th className="px-6 py-4 font-medium">Days Worked</th>
-                      <th className="px-6 py-4 font-medium">Total Hours</th>
-                      <th className="px-6 py-4 font-medium">Average Hours/Day</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(() => {
-                      const monthlyData = attendanceHistory.reduce((acc, curr) => {
-                        const dateObj = new Date(curr.date);
-                        const month = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
-                        if (!acc[month]) {
-                          acc[month] = { month, daysWorked: 0, totalHours: 0 };
-                        }
-                        if (curr.checkOutTime) { // Only count completed days
-                          acc[month].daysWorked += 1;
-                          acc[month].totalHours += curr.totalHours || 0;
-                        }
-                        return acc;
-                      }, {});
-                      const monthlyArray = Object.values(monthlyData);
-                      
-                      return monthlyArray.length > 0 ? (
-                        monthlyArray.map((m) => (
-                          <tr key={m.month} className="hover:bg-gray-50/30 transition-colors">
-                            <td className="px-6 py-4 font-medium text-gray-900">{m.month}</td>
-                            <td className="px-6 py-4 text-gray-600">{m.daysWorked} days</td>
-                            <td className="px-6 py-4 font-medium text-primary">{m.totalHours.toFixed(1)}h</td>
-                            <td className="px-6 py-4 text-gray-600">
-                              {m.daysWorked > 0 ? (m.totalHours / m.daysWorked).toFixed(1) : 0}h
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="4" className="px-6 py-8 text-center text-gray-500">No monthly data available.</td>
-                        </tr>
-                      );
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

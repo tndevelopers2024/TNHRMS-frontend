@@ -5,8 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Plus, Calendar, Trash2, Pencil } from "lucide-react";
+import { useConfirm } from "../../context/ConfirmContext";
+import toast from "react-hot-toast";
 
 export default function AdminHolidays() {
+  const { confirm } = useConfirm();
   const [showAddForm, setShowAddForm] = useState(false);
   const [holidays, setHolidays] = useState([]);
   const [editId, setEditId] = useState(null);
@@ -75,17 +78,27 @@ export default function AdminHolidays() {
   };
 
   const removeHoliday = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this holiday?")) return;
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/holidays/${id}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        setHolidays(holidays.filter(h => h._id !== id));
+    confirm({
+      title: "Delete Holiday",
+      message: "Are you sure you want to delete this holiday?",
+      confirmText: "Delete",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/holidays/${id}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            setHolidays(holidays.filter(h => h._id !== id));
+            toast.success("Holiday deleted successfully");
+          } else {
+            toast.error("Failed to delete holiday");
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error("An error occurred while deleting holiday");
+        }
       }
-    } catch (err) {
-      console.error("Error removing holiday:", err);
-    }
+    });
   };
 
   return (

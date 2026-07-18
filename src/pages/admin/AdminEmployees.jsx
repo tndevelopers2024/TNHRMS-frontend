@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Users, Briefcase, X, ClipboardList, Settings2, Trash2, Edit2, Check, Wallet } from "lucide-react";
+import { Plus, Users, Briefcase, X, ClipboardList, Settings2, Trash2, Edit2, Check, Wallet, User } from "lucide-react";
 import { DatePicker } from "@/components/ui/DatePicker";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../context/ConfirmContext";
+import { DocumentViewerModal } from "../../components/DocumentViewerModal";
 
 export default function AdminEmployees() {
   const { confirm } = useConfirm();
@@ -24,6 +25,7 @@ export default function AdminEmployees() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewerData, setViewerData] = useState({ isOpen: false, url: '' });
 
   const [formData, setFormData] = useState({
     name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '',
@@ -116,23 +118,69 @@ export default function AdminEmployees() {
   };
 
   const handleDeleteDepartment = async (deptId) => {
-    const isConfirmed = await confirm("Are you sure? Employees in this department will be moved to 'General'.", "Delete Department");
-    if (!isConfirmed) return;
+    confirm({
+      title: "Delete Department",
+      message: "Are you sure? Employees in this department will be moved to 'General'.",
+      confirmText: "Delete",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/departments/${deptId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            fetchDepartments();
+            fetchEmployees(); // Re-fetch employees
+            toast.success("Department deleted successfully");
+          } else {
+            const err = await res.json();
+            toast.error(err.message || 'Failed to delete department');
+          }
+        } catch (err) {
+          console.error("Error deleting department:", err);
+        }
+      }
+    });
+  };
+
+  const handleApproveProfile = async (empId) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/departments/${deptId}`, {
-        method: 'DELETE'
-      });
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/approve-profile`, { method: 'POST' });
       if (res.ok) {
-        fetchDepartments();
-        fetchEmployees(); // Re-fetch employees
-        toast.success("Department deleted successfully");
+        toast.success("Profile updates approved successfully");
+        fetchEmployees();
+        handleCardClick(empId); // refresh modal
       } else {
         const err = await res.json();
-        toast.error(err.message || 'Failed to delete department');
+        toast.error(err.message || 'Failed to approve updates');
       }
     } catch (err) {
-      console.error("Error deleting department:", err);
+      console.error(err);
+      toast.error('An error occurred');
     }
+  };
+
+  const handleRejectProfile = async (empId) => {
+    confirm({
+      title: "Reject Updates",
+      message: "Are you sure you want to reject these profile changes? They will be permanently discarded.",
+      confirmText: "Reject",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/reject-profile`, { method: 'POST' });
+          if (res.ok) {
+            toast.success("Profile updates rejected and discarded");
+            fetchEmployees();
+            handleCardClick(empId); // refresh modal
+          } else {
+            const err = await res.json();
+            toast.error(err.message || 'Failed to reject updates');
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error('An error occurred');
+        }
+      }
+    });
   };
 
   const handleSaveEmployee = async (e) => {
@@ -171,23 +219,29 @@ export default function AdminEmployees() {
   };
 
   const handleDeleteEmployee = async (empId) => {
-    const isConfirmed = await confirm("Are you sure you want to delete this employee? This action cannot be undone.", "Delete Employee");
-    if (!isConfirmed) return;
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        setIsModalOpen(false);
-        fetchEmployees();
-        toast.success("Employee deleted successfully");
-      } else {
-        const err = await res.json();
-        toast.error(err.message || 'Failed to delete employee');
+    confirm({
+      title: "Delete Employee",
+      message: "Are you sure you want to delete this employee? This action cannot be undone.",
+      confirmText: "Delete",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            setIsModalOpen(false);
+            fetchEmployees();
+            toast.success("Employee deleted successfully");
+          } else {
+            const errorData = await res.json();
+            toast.error(errorData.message || 'Failed to delete employee');
+          }
+        } catch (err) {
+          console.error("Error deleting employee:", err);
+          toast.error("An error occurred while deleting employee");
+        }
       }
-    } catch (err) {
-      console.error("Error deleting employee:", err);
-    }
+    });
   };
 
   // Group employees by department
@@ -200,6 +254,7 @@ export default function AdminEmployees() {
 
   return (
     <div className="space-y-6">
+      <DocumentViewerModal isOpen={viewerData.isOpen} url={viewerData.url} onClose={() => setViewerData({ isOpen: false, url: '' })} />
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Employees Directory</h1>
@@ -216,7 +271,7 @@ export default function AdminEmployees() {
       </div>
 
       {showAddForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-start pt-10 justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h2 className="text-xl font-bold text-gray-900">{editingEmployeeId ? "Edit Employee" : "Add New Employee"}</h2>
@@ -224,9 +279,9 @@ export default function AdminEmployees() {
                 <X className="w-5 h-5" />
               </Button>
             </div>
-            <div className="p-6 overflow-y-auto">
-              <form onSubmit={handleSaveEmployee} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-6 pt-2 overflow-y-auto">
+              <form onSubmit={handleSaveEmployee} className="flex flex-col gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                   {/* Basic Details */}
                   <div className="space-y-2">
                     <Label>Full Name</Label>
@@ -258,21 +313,21 @@ export default function AdminEmployees() {
                   </div>
                   <div className="space-y-2">
                     <Label>Joining Date</Label>
-                    <DatePicker required value={formData.joiningDate} onChange={val => setFormData({...formData, joiningDate: val})} />
+                    <DatePicker value={formData.joiningDate} onChange={val => setFormData({...formData, joiningDate: val})} />
                   </div>
                   <div className="space-y-2">
                     <Label>Salary (Annual)</Label>
-                    <Input type="number" required value={formData.salary} onChange={e => setFormData({...formData, salary: e.target.value})} placeholder="e.g. 500000 for 5 LPA" />
+                    <Input type="number" value={formData.salary} onChange={e => setFormData({...formData, salary: e.target.value})} placeholder="e.g. 500000 for 5 LPA" />
                   </div>
 
                   {/* Personal Details */}
                   <div className="space-y-2">
                     <Label>Phone Number</Label>
-                    <Input required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="e.g. +1 234 567 8900" />
+                    <Input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="e.g. +1 234 567 8900" />
                   </div>
                   <div className="space-y-2">
                     <Label>Gender</Label>
-                    <select required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
+                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={formData.gender} onChange={e => setFormData({...formData, gender: e.target.value})}>
                       <option value="" disabled>Select gender</option>
                       <option value="Male">Male</option>
                       <option value="Female">Female</option>
@@ -281,11 +336,11 @@ export default function AdminEmployees() {
                   </div>
                   <div className="space-y-2">
                     <Label>Date of Birth</Label>
-                    <DatePicker required value={formData.dob} onChange={val => setFormData({...formData, dob: val})} />
+                    <DatePicker value={formData.dob} onChange={val => setFormData({...formData, dob: val})} />
                   </div>
                   <div className="space-y-2">
                     <Label>Address</Label>
-                    <Input required value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="e.g. 123 Main St, City" />
+                    <Input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="e.g. 123 Main St, City" />
                   </div>
 
                   {/* Emergency Contact */}
@@ -294,15 +349,15 @@ export default function AdminEmployees() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="space-y-2">
                         <Label>Name</Label>
-                        <Input required value={formData.emergencyContact?.name || ''} onChange={e => setFormData({...formData, emergencyContact: {...(formData.emergencyContact || {}), name: e.target.value}})} placeholder="e.g. Jane Doe" />
+                        <Input value={formData.emergencyContact?.name || ''} onChange={e => setFormData({...formData, emergencyContact: {...(formData.emergencyContact || {}), name: e.target.value}})} placeholder="e.g. Jane Doe" />
                       </div>
                       <div className="space-y-2">
                         <Label>Relationship</Label>
-                        <Input required value={formData.emergencyContact?.relationship || ''} onChange={e => setFormData({...formData, emergencyContact: {...(formData.emergencyContact || {}), relationship: e.target.value}})} placeholder="e.g. Spouse" />
+                        <Input value={formData.emergencyContact?.relationship || ''} onChange={e => setFormData({...formData, emergencyContact: {...(formData.emergencyContact || {}), relationship: e.target.value}})} placeholder="e.g. Spouse" />
                       </div>
                       <div className="space-y-2">
                         <Label>Phone Number</Label>
-                        <Input required value={formData.emergencyContact?.phone || ''} onChange={e => setFormData({...formData, emergencyContact: {...(formData.emergencyContact || {}), phone: e.target.value}})} placeholder="e.g. +1 555 987 6543" />
+                        <Input value={formData.emergencyContact?.phone || ''} onChange={e => setFormData({...formData, emergencyContact: {...(formData.emergencyContact || {}), phone: e.target.value}})} placeholder="e.g. +1 555 987 6543" />
                       </div>
                     </div>
                   </div>
@@ -344,6 +399,13 @@ export default function AdminEmployees() {
                       <h3 className="font-semibold text-gray-900">{emp.name}</h3>
                       <p className="text-sm text-gray-500">{emp.designation}</p>
                       <p className="text-xs text-primary mt-1">{emp.email}</p>
+                      {emp.pendingProfileUpdates && (
+                        <div className="mt-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">
+                            Updates Pending
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -361,8 +423,8 @@ export default function AdminEmployees() {
 
       {/* Employee Details Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h2 className="text-xl font-bold text-gray-900">Employee Details</h2>
               <Button variant="ghost" size="icon" onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-900">
@@ -377,6 +439,196 @@ export default function AdminEmployees() {
                 </div>
               ) : selectedDetails ? (
                 <div className="space-y-8">
+                  {(() => {
+                    const p = selectedDetails.employee.pendingProfileUpdates;
+                    if (!p) return null;
+                    const old = selectedDetails.employee;
+                    let hasChanges = false;
+                    
+                    Object.entries(p).forEach(([key, value]) => {
+                      if (!['documents', 'bankingDetails', 'emergencyContact', 'professionalReferences'].includes(key)) {
+                        const oldValue = old[key];
+                        if (value !== oldValue && !(!value && !oldValue)) {
+                          if ((key === 'dob' || key === 'joiningDate') && value && oldValue) {
+                            if (new Date(value).getTime() !== new Date(oldValue).getTime()) hasChanges = true;
+                          } else {
+                            hasChanges = true;
+                          }
+                        }
+                      }
+                    });
+
+                    if (p.bankingDetails) {
+                      Object.entries(p.bankingDetails).forEach(([k, v]) => {
+                        if (v !== old.bankingDetails?.[k] && !(!v && !old.bankingDetails?.[k])) hasChanges = true;
+                      });
+                    }
+
+                    if (p.emergencyContact) {
+                      Object.entries(p.emergencyContact).forEach(([k, v]) => {
+                        if (v !== old.emergencyContact?.[k] && !(!v && !old.emergencyContact?.[k])) hasChanges = true;
+                      });
+                    }
+
+                    if (p.documents) {
+                      Object.entries(p.documents).forEach(([k, v]) => {
+                        if (v && v !== old.documents?.[k]) hasChanges = true;
+                      });
+                    }
+
+                    if (p.professionalReferences && p.professionalReferences.length > 0) hasChanges = true;
+
+                    if (!hasChanges) return null;
+
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-8">
+                        <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center">
+                          <svg className="w-6 h-6 text-amber-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <h4 className="text-lg font-bold text-amber-800">Pending Profile Updates</h4>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={() => handleRejectProfile(selectedDetails.employee._id)}
+                            className="bg-rose-100 hover:bg-rose-200 text-rose-700" 
+                            size="sm"
+                          >
+                            Reject
+                          </Button>
+                          <Button 
+                            onClick={() => handleApproveProfile(selectedDetails.employee._id)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white" 
+                            size="sm"
+                          >
+                            Approve Updates
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-amber-700 mb-4">The employee has submitted the following profile updates. Approving will overwrite their live profile data.</p>
+                      
+                      <div className="bg-white rounded-lg border border-amber-100 overflow-hidden">
+                        <div className="p-4 bg-amber-50/50 border-b border-amber-100">
+                           <p className="font-semibold text-gray-800">Submitted Data</p>
+                        </div>
+                        <div className="p-4">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6">
+                            {Object.entries(selectedDetails.employee.pendingProfileUpdates).filter(([key, value]) => {
+                              if (['documents', 'bankingDetails', 'emergencyContact', 'professionalReferences'].includes(key)) return false;
+                              const oldValue = selectedDetails.employee[key];
+                              if (!value && !oldValue) return false;
+                              if (value === oldValue) return false;
+                              if ((key === 'dob' || key === 'joiningDate') && value && oldValue) {
+                                if (new Date(value).getTime() === new Date(oldValue).getTime()) return false;
+                              }
+                              return true;
+                            }).map(([key, value]) => (
+                                <div key={key}>
+                                  <p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                                  <p className="font-medium text-gray-900">{value || 'N/A'}</p>
+                                </div>
+                            ))}
+                          </div>
+                          
+                          {(() => {
+                            const pendingBanking = selectedDetails.employee.pendingProfileUpdates.bankingDetails || {};
+                            const oldBanking = selectedDetails.employee.bankingDetails || {};
+                            const changedBanking = Object.entries(pendingBanking).filter(([k, v]) => v !== oldBanking[k] && !(!v && !oldBanking[k]));
+                            
+                            if (changedBanking.length === 0) return null;
+                            
+                            return (
+                              <div className="mb-6">
+                                <h5 className="font-semibold text-gray-800 mb-2 border-b pb-1">Banking Details</h5>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  {changedBanking.map(([key, value]) => (
+                                    <div key={key}>
+                                      <p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
+                                      <p className="font-medium text-gray-900">{value || 'N/A'}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {(() => {
+                            const pendingEmergency = selectedDetails.employee.pendingProfileUpdates.emergencyContact || {};
+                            const oldEmergency = selectedDetails.employee.emergencyContact || {};
+                            const changedEmergency = Object.entries(pendingEmergency).filter(([k, v]) => v !== oldEmergency[k] && !(!v && !oldEmergency[k]));
+                            
+                            if (changedEmergency.length === 0) return null;
+                            
+                            return (
+                              <div className="mb-6">
+                                <h5 className="font-semibold text-gray-800 mb-2 border-b pb-1">Emergency Contact</h5>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                  {changedEmergency.map(([key, value]) => (
+                                    <div key={key}>
+                                      <p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">{key}</p>
+                                      <p className="font-medium text-gray-900">{value || 'N/A'}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {selectedDetails.employee.pendingProfileUpdates.professionalReferences && selectedDetails.employee.pendingProfileUpdates.professionalReferences.length > 0 && (
+                            <div className="mb-6">
+                              <h5 className="font-semibold text-gray-800 mb-2 border-b pb-1">Professional References</h5>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                {selectedDetails.employee.pendingProfileUpdates.professionalReferences.map((ref, idx) => (
+                                  <div key={idx} className="p-3 border rounded-lg bg-gray-50/50">
+                                    <p className="font-semibold text-gray-900">{ref.name}</p>
+                                    <p className="text-gray-600 text-xs">Desig: {ref.designation || 'N/A'}</p>
+                                    <p className="text-gray-600 text-xs">Company: {ref.company || 'N/A'}</p>
+                                    <p className="text-gray-600 text-xs">Phone: {ref.contactNumber || 'N/A'}</p>
+                                    <p className="text-gray-600 text-xs">Email: {ref.email || 'N/A'}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {(() => {
+                            const pendingDocs = selectedDetails.employee.pendingProfileUpdates.documents || {};
+                            const oldDocs = selectedDetails.employee.documents || {};
+                            const changedDocs = Object.entries(pendingDocs).filter(([k, v]) => v && v !== oldDocs[k]);
+                            
+                            if (changedDocs.length === 0) return null;
+                            
+                            return (
+                              <div>
+                                <h5 className="font-semibold text-gray-800 mb-2 border-b pb-1">Uploaded Documents</h5>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                  {changedDocs.map(([key, value]) => {
+                                    return (
+                                      <button 
+                                        key={key} 
+                                        onClick={(e) => { e.preventDefault(); setViewerData({ isOpen: true, url: `${import.meta.env.VITE_API_URL}${value}` }); }}
+                                        className="p-2 border rounded hover:border-primary hover:bg-primary/5 flex items-center transition-colors"
+                                      >
+                                        <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center mr-2 text-blue-600 shrink-0">
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                          </svg>
+                                        </div>
+                                        <span className="text-xs font-medium text-gray-700 capitalize truncate w-full ml-2 text-left">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                    );
+                  })()}
+
                   {/* Profile Header */}
                   <div className="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-6 border-b pb-6">
                     <img 
@@ -398,12 +650,14 @@ export default function AdminEmployees() {
                   </div>
 
                   {/* Comprehensive Details */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl text-sm border border-gray-100">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl text-sm border border-gray-100">
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Phone</p><p className="font-medium text-gray-900">{selectedDetails.employee.phone || 'N/A'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Joining Date</p><p className="font-medium text-gray-900">{selectedDetails.employee.joiningDate ? new Date(selectedDetails.employee.joiningDate).toLocaleDateString('en-GB') : 'N/A'}</p></div>
-                    <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Salary</p><p className="font-medium text-emerald-600">${selectedDetails.employee.salary ? selectedDetails.employee.salary.toLocaleString() : 'N/A'}</p></div>
+                    <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Salary</p><p className="font-medium text-emerald-600">₹{selectedDetails.employee.salary ? selectedDetails.employee.salary.toLocaleString() : 'N/A'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Gender</p><p className="font-medium text-gray-900">{selectedDetails.employee.gender || 'N/A'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Date of Birth</p><p className="font-medium text-gray-900">{selectedDetails.employee.dob ? new Date(selectedDetails.employee.dob).toLocaleDateString('en-GB') : 'N/A'}</p></div>
+                    <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Marital Status</p><p className="font-medium text-gray-900">{selectedDetails.employee.maritalStatus || 'N/A'}</p></div>
+                    <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Blood Group</p><p className="font-medium text-gray-900">{selectedDetails.employee.bloodGroup || 'N/A'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Address</p><p className="font-medium text-gray-900">{selectedDetails.employee.address || 'N/A'}</p></div>
                   </div>
 
@@ -481,7 +735,84 @@ export default function AdminEmployees() {
                     </div>
                   )}
 
-                  {/* Assigned Tasks */}
+                  {/* Banking Details */}
+                  {selectedDetails.employee.bankingDetails && selectedDetails.employee.bankingDetails.accountNumber && (
+                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-100 mt-6">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Banking Details</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div>
+                          <p className="text-gray-500 mb-1 text-sm">Account Holder</p>
+                          <p className="font-medium text-gray-900">{selectedDetails.employee.bankingDetails.accountHolderName || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 mb-1 text-sm">Bank Name</p>
+                          <p className="font-medium text-gray-900">{selectedDetails.employee.bankingDetails.bankName || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 mb-1 text-sm">Account Number</p>
+                          <p className="font-medium text-gray-900">{selectedDetails.employee.bankingDetails.accountNumber || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 mb-1 text-sm">IFSC Code</p>
+                          <p className="font-medium text-gray-900">{selectedDetails.employee.bankingDetails.ifscCode || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 mb-1 text-sm">UAN</p>
+                          <p className="font-medium text-gray-900">{selectedDetails.employee.bankingDetails.uan || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Uploaded Documents */}
+                  {selectedDetails.employee.documents && Object.keys(selectedDetails.employee.documents).length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-semibold flex items-center text-gray-800 mt-6 border-t pt-6">
+                        <ClipboardList className="w-5 h-5 mr-2 text-primary" />
+                        Uploaded Documents
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {Object.entries(selectedDetails.employee.documents).map(([key, value]) => {
+                          if (!value) return null;
+                          return (
+                            <button 
+                              key={key} 
+                              onClick={(e) => { e.preventDefault(); setViewerData({ isOpen: true, url: `${import.meta.env.VITE_API_URL}${value}` }); }}
+                              className="p-3 border rounded-lg hover:border-primary hover:bg-primary/5 flex items-center transition-colors"
+                            >
+                              <div className="w-8 h-8 rounded bg-blue-100 flex items-center justify-center mr-3 text-blue-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 capitalize truncate w-full text-left">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Professional References */}
+                  {selectedDetails.employee.professionalReferences && selectedDetails.employee.professionalReferences.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-lg font-semibold flex items-center text-gray-800 mt-6 border-t pt-6">
+                        <User className="w-5 h-5 mr-2 text-primary" />
+                        Professional References
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {selectedDetails.employee.professionalReferences.map((ref, idx) => (
+                          <div key={idx} className="p-4 border rounded-xl bg-gray-50 text-sm">
+                            <p className="font-semibold text-gray-900 mb-2">{ref.name}</p>
+                            <p className="text-gray-600"><span className="text-gray-400">Desig:</span> {ref.designation || 'N/A'}</p>
+                            <p className="text-gray-600"><span className="text-gray-400">Company:</span> {ref.company || 'N/A'}</p>
+                            <p className="text-gray-600"><span className="text-gray-400">Phone:</span> {ref.contactNumber || 'N/A'}</p>
+                            <p className="text-gray-600"><span className="text-gray-400">Email:</span> {ref.email || 'N/A'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-4">
                     <h4 className="text-lg font-semibold flex items-center text-gray-800">
                       <ClipboardList className="w-5 h-5 mr-2 text-primary" />
@@ -653,7 +984,7 @@ export default function AdminEmployees() {
 
       {/* Manage Departments Modal */}
       {showDeptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
             <div className="flex justify-between items-center p-6 border-b border-gray-100">
               <h2 className="text-xl font-bold text-gray-900">Manage Departments</h2>
@@ -706,6 +1037,12 @@ export default function AdminEmployees() {
           </div>
         </div>
       )}
+
+      <DocumentViewerModal 
+        isOpen={viewerData.isOpen} 
+        fileUrl={viewerData.url} 
+        onClose={() => setViewerData({ isOpen: false, url: '' })} 
+      />
     </div>
   );
 }

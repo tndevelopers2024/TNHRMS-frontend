@@ -15,22 +15,50 @@ export const ConfirmProvider = ({ children }) => {
     confirmText: 'Confirm',
     cancelText: 'Cancel'
   });
+  const [isLoading, setIsLoading] = useState(false);
   const [resolver, setResolver] = useState(null);
+  const [asyncAction, setAsyncAction] = useState(null);
 
-  const confirm = useCallback((message, title = 'Confirmation', confirmText = 'Confirm', cancelText = 'Cancel') => {
-    setOptions({ title, message, confirmText, cancelText });
+  const confirm = useCallback((optionsOrMessage, title = 'Confirmation', confirmText = 'Confirm', cancelText = 'Cancel') => {
+    if (typeof optionsOrMessage === 'object') {
+      setOptions({
+        title: optionsOrMessage.title || 'Confirm',
+        message: optionsOrMessage.message || 'Are you sure?',
+        confirmText: optionsOrMessage.confirmText || 'Confirm',
+        cancelText: optionsOrMessage.cancelText || 'Cancel'
+      });
+      setAsyncAction(() => optionsOrMessage.action);
+    } else {
+      setOptions({ title, message: optionsOrMessage, confirmText, cancelText });
+      setAsyncAction(null);
+    }
+    
     setIsOpen(true);
     return new Promise((resolve) => {
       setResolver(() => resolve);
     });
   }, []);
 
-  const handleConfirm = () => {
-    setIsOpen(false);
-    if (resolver) resolver(true);
+  const handleConfirm = async () => {
+    if (asyncAction) {
+      setIsLoading(true);
+      try {
+        await asyncAction();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+        setIsOpen(false);
+        if (resolver) resolver(true);
+      }
+    } else {
+      setIsOpen(false);
+      if (resolver) resolver(true);
+    }
   };
 
   const handleCancel = () => {
+    if (isLoading) return;
     setIsOpen(false);
     if (resolver) resolver(false);
   };
@@ -45,11 +73,13 @@ export const ConfirmProvider = ({ children }) => {
               <h2 className="text-xl font-bold text-gray-900 mb-2">{options.title}</h2>
               <p className="text-gray-600 mb-6">{options.message}</p>
               <div className="flex justify-center space-x-3">
-                <Button variant="outline" onClick={handleCancel} className="w-full">
+                <Button variant="outline" onClick={handleCancel} className="w-full" disabled={isLoading}>
                   {options.cancelText}
                 </Button>
-                <Button onClick={handleConfirm} className="w-full bg-primary hover:bg-primary/90">
-                  {options.confirmText}
+                <Button onClick={handleConfirm} className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
+                  {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : options.confirmText}
                 </Button>
               </div>
             </div>

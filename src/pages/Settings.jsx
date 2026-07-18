@@ -63,38 +63,44 @@ export default function Settings() {
     }
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result;
-        setProfileImage(base64String);
-        
-        try {
-          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/update-profile/${userInfo._id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ profileImage: base64String })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setUploadMessage('Profile image updated!');
-            // Update local storage so other components can see it
-            const updatedUser = { ...userInfo, profileImage: base64String };
-            localStorage.setItem('userInfo', JSON.stringify(updatedUser));
-            setUserInfo(updatedUser);
-            // Dispatch a custom event to notify other components (like sidebar)
-            window.dispatchEvent(new Event('profileImageUpdated'));
-          } else {
-            setUploadMessage('Failed to save image.');
-          }
-        } catch (err) {
-          setUploadMessage('Network error occurred');
+      const objectUrl = URL.createObjectURL(file);
+      setProfileImage(objectUrl);
+      
+      const formData = new FormData();
+      formData.append('profileImage', file);
+
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/update-profile/${userInfo._id}`, {
+          method: 'PUT',
+          body: formData
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setUploadMessage('Profile image updated!');
+          // Update local storage so other components can see it
+          const updatedUser = { ...userInfo, profileImage: data.profileImage };
+          localStorage.setItem('userInfo', JSON.stringify(updatedUser));
+          setUserInfo(updatedUser);
+          setProfileImage(data.profileImage);
+          // Dispatch a custom event to notify other components (like sidebar)
+          window.dispatchEvent(new Event('profileImageUpdated'));
+        } else {
+          setUploadMessage('Failed to save image.');
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        setUploadMessage('Network error occurred');
+      }
     }
+  };
+
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('blob:')) return url; // local preview
+    if (url.startsWith('/')) return `${import.meta.env.VITE_API_URL}${url}`;
+    return url;
   };
 
   return (
@@ -115,7 +121,7 @@ export default function Settings() {
           <CardContent className="flex flex-col items-center">
             <div className="relative group w-32 h-32 mb-6">
               <img 
-                src={profileImage || `https://api.dicebear.com/7.x/notionists/svg?seed=${userInfo.name?.replace(' ', '')}&backgroundColor=f3f4f6`}
+                src={getImageUrl(profileImage) || `https://api.dicebear.com/7.x/notionists/svg?seed=${userInfo.name?.replace(' ', '')}&backgroundColor=f3f4f6`}
                 alt="Profile" 
                 className="w-full h-full rounded-full object-cover border-4 border-white shadow-md dark:border-gray-800"
               />

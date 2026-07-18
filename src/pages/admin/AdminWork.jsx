@@ -141,23 +141,29 @@ export default function AdminWork() {
   };
 
   const handleDeleteTask = async (taskId) => {
-    const isConfirmed = await confirm("Are you sure you want to delete this task?", "Delete Task");
-    if (!isConfirmed) return;
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/tasks/${taskId}`, {
-        method: 'DELETE'
-      });
-      if (res.ok) {
-        setEmployeeTasks(prev => prev.filter(t => t._id !== taskId));
-        fetchEmployees();
-        toast.success("Task deleted successfully");
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.message || 'Failed to delete task');
+    confirm({
+      title: "Delete Task",
+      message: "Are you sure you want to delete this task?",
+      confirmText: "Delete",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/tasks/${taskId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            setEmployeeTasks(prev => prev.filter(t => t._id !== taskId));
+            fetchEmployees();
+            toast.success("Task deleted successfully");
+          } else {
+            const errorData = await res.json();
+            toast.error(errorData.message || 'Failed to delete task');
+          }
+        } catch (err) {
+          console.error("Error deleting task:", err);
+          toast.error("An error occurred while deleting task");
+        }
       }
-    } catch (err) {
-      console.error("Error deleting task:", err);
-    }
+    });
   };
 
   // Filter employees

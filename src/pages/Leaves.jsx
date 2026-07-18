@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, FileText, CheckCircle, Clock, XCircle, Plus, Loader2 } from "lucide-react";
+import { Calendar, FileText, CheckCircle, Clock, XCircle, Plus, Loader2, Download } from "lucide-react";
 import { DatePicker } from "@/components/ui/DatePicker";
 import toast from "react-hot-toast";
 import { useConfirm } from "../context/ConfirmContext";
@@ -58,6 +58,42 @@ export default function Leaves() {
     return diffDays;
   };
 
+  const exportLeaveCSV = () => {
+    if (!leaves || leaves.length === 0) {
+      toast.error("No leave records to export");
+      return;
+    }
+    
+    const headers = ['Leave Type', 'Start Date', 'End Date', 'Days', 'Reason', 'Status'];
+    const rows = leaves.map(leave => [
+      leave.type || '-',
+      leave.startDate ? new Date(leave.startDate).toLocaleDateString('en-GB') : '-',
+      leave.endDate ? new Date(leave.endDate).toLocaleDateString('en-GB') : '-',
+      leave.days || '0',
+      `"${(leave.reason || '').replace(/"/g, '""')}"`,
+      leave.status || 'Pending'
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    
+    // Generate dynamic filename
+    const empName = user?.name ? user.name.replace(/\s+/g, '_') : 'Employee';
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute('download', `${empName}_Leave_History_${dateStr}.csv`);
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleApplyLeave = async (e) => {
     e.preventDefault();
     if (!user._id) return;
@@ -73,22 +109,49 @@ export default function Leaves() {
       return;
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startDateObj = new Date(formData.startDate);
+    startDateObj.setHours(0, 0, 0, 0);
+
+    if (startDateObj < today && formData.type !== "Sick Leave") {
+      toast.error(`${formData.type} must be applied in advance. Only Sick Leave can be applied for past dates.`);
+      return;
+    }
+
     setSubmitting(true);
     const days = calculateDays(formData.startDate, formData.endDate);
 
+    const balanceConfig = {
+      "Casual Leave": 10,
+      "Sick Leave": 10,
+      "Earned Leave": 15
+    };
+
+    const maxDays = balanceConfig[formData.type];
+    const currentlyUsed = calcUsed(formData.type);
+    
+    if (days > (maxDays - currentlyUsed)) {
+      toast.error(`You only have ${maxDays - currentlyUsed} day(s) of ${formData.type} remaining.`);
+      setSubmitting(false);
+      return;
+    }
+
     try {
+      const data = new FormData();
+      data.append('employee', user._id);
+      data.append('type', formData.type);
+      data.append('startDate', formData.startDate);
+      data.append('endDate', formData.endDate);
+      data.append('days', days);
+      data.append('reason', formData.reason);
+      if (formData.attachment) {
+        data.append('attachment', formData.attachment);
+      }
+
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          employee: user._id,
-          type: formData.type,
-          startDate: formData.startDate,
-          endDate: formData.endDate,
-          days,
-          reason: formData.reason,
-          attachment: formData.attachment
-        })
+        body: data
       });
 
       if (res.ok) {
@@ -112,38 +175,38 @@ export default function Leaves() {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error("File size should not exceed 2MB.");
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("File size should not exceed 5MB.");
         e.target.value = '';
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, attachment: reader.result }));
-      };
-      reader.readAsDataURL(file);
+      setFormData(prev => ({ ...prev, attachment: file }));
     }
   };
 
   const handleCancelLeave = async (leaveId) => {
-    const isConfirmed = await confirm("Are you sure you want to cancel this leave request?", "Cancel Leave");
-    if (!isConfirmed) return;
-    
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves/${leaveId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        setLeaves(leaves.filter(l => l._id !== leaveId));
-        toast.success("Leave cancelled successfully");
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.message || "Failed to cancel leave");
+    confirm({
+      title: "Cancel Leave",
+      message: "Are you sure you want to cancel this leave request?",
+      confirmText: "Cancel Request",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves/${leaveId}`, {
+            method: 'DELETE',
+          });
+          if (res.ok) {
+            setLeaves(leaves.filter(l => l._id !== leaveId));
+            toast.success("Leave cancelled successfully");
+          } else {
+            const errorData = await res.json();
+            toast.error(errorData.message || "Failed to cancel leave");
+          }
+        } catch (err) {
+          console.error("Error cancelling leave:", err);
+          toast.error("Failed to cancel leave");
+        }
       }
-    } catch (err) {
-      console.error("Error cancelling leave:", err);
-      toast.error("Failed to connect to server");
-    }
+    });
   };
 
   const canCancel = (startDate) => {
@@ -157,7 +220,7 @@ export default function Leaves() {
   // Calculate dynamically from fetched data (Only count Approved leaves)
   const calcUsed = (type) => {
     let used = leaves
-      .filter(l => l.type === type && l.status === 'Approved')
+      .filter(l => l.type === type && (l.status === 'Approved' || l.status === 'Pending'))
       .reduce((acc, curr) => acc + curr.days, 0);
       
     if (type === 'Casual Leave') {
@@ -284,8 +347,11 @@ export default function Leaves() {
 
       {/* Leave History Table */}
       <Card className="border-0 shadow-sm overflow-hidden">
-        <CardHeader className="bg-white border-b border-gray-50">
+        <CardHeader className="bg-white border-b border-gray-50 flex flex-row items-center justify-between pb-4">
           <CardTitle>Leave History</CardTitle>
+          <Button onClick={exportLeaveCSV} variant="outline" size="sm" className="h-9 text-emerald-600 border-emerald-200 hover:bg-emerald-50 mt-0">
+            <Download className="h-4 w-4 mr-2" /> Export
+          </Button>
         </CardHeader>
         <div className="overflow-x-auto">
           {loading ? (

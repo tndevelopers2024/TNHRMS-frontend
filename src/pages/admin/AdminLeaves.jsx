@@ -6,9 +6,12 @@ import { Search, Check, X } from "lucide-react";
 
 import { useConfirm } from "../../context/ConfirmContext";
 import toast from "react-hot-toast";
+import { DocumentViewerModal } from "../../components/DocumentViewerModal";
+import { FileDown, Eye } from "lucide-react";
 
 export default function AdminLeaves() {
   const [requests, setRequests] = useState([]);
+  const [viewerData, setViewerData] = useState({ isOpen: false, url: '' });
   const { confirm } = useConfirm();
 
   useEffect(() => {
@@ -19,30 +22,34 @@ export default function AdminLeaves() {
   }, []);
 
   const handleAction = async (id, action) => {
-    const isApproved = await confirm(`Are you sure you want to ${action === 'Approved' ? 'approve' : 'reject'} this leave request?`, `${action === 'Approved' ? 'Approve' : 'Reject'} Leave`);
-    if (!isApproved) return;
-
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/leaves/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: action })
-      });
-      
-      if (res.ok) {
-        setRequests(requests.map(req => 
-          req._id === id ? { ...req, status: action } : req
-        ));
-        toast.success(`Leave request ${action.toLowerCase()}`);
-      } else {
-        toast.error("Failed to update leave status");
+    confirm({
+      title: `${action === 'Approved' ? 'Approve' : 'Reject'} Leave`,
+      message: `Are you sure you want to ${action === 'Approved' ? 'approve' : 'reject'} this leave request?`,
+      confirmText: "Confirm",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/leaves/${id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status: action })
+          });
+          
+          if (res.ok) {
+            setRequests(requests.map(req => 
+              req._id === id ? { ...req, status: action } : req
+            ));
+            toast.success(`Leave request ${action.toLowerCase()}`);
+          } else {
+            toast.error("Failed to update leave status");
+          }
+        } catch (error) {
+          console.error("Error updating leave:", error);
+          toast.error("Failed to connect to server");
+        }
       }
-    } catch (error) {
-      console.error("Error updating leave:", error);
-      toast.error("Failed to connect to server");
-    }
+    });
   };
 
   return (
@@ -84,7 +91,17 @@ export default function AdminLeaves() {
                       {new Date(req.startDate).toLocaleDateString('en-GB')} - {new Date(req.endDate).toLocaleDateString('en-GB')}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-gray-500 max-w-xs truncate" title={req.reason}>{req.reason}</td>
+                  <td className="px-6 py-4">
+                    <div className="text-gray-500 max-w-xs truncate" title={req.reason}>{req.reason}</div>
+                    {req.attachment && (
+                      <button 
+                        onClick={() => setViewerData({ isOpen: true, url: req.attachment })}
+                        className="mt-2 inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors border border-blue-200"
+                      >
+                        <Eye className="w-3 h-3 mr-1" /> View Document
+                      </button>
+                    )}
+                  </td>
                   <td className="px-6 py-4">
                     {req.status === "Pending" ? (
                       <div className="flex items-center justify-center space-x-2">
@@ -111,6 +128,12 @@ export default function AdminLeaves() {
           </table>
         </div>
       </Card>
+      
+      <DocumentViewerModal
+        isOpen={viewerData.isOpen}
+        onClose={() => setViewerData({ isOpen: false, url: '' })}
+        fileUrl={viewerData.url}
+      />
     </div>
   )
 }
