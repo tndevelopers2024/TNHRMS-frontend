@@ -72,6 +72,29 @@ function DashboardLayoutContent() {
 
   const sidebarLinks = role === 'admin' ? adminLinks : employeeLinks;
   const [profileImage, setProfileImage] = useState(userInfo?.profileImage || '');
+  const [joiningDate, setJoiningDate] = useState(userInfo?.joiningDate || null);
+
+  useEffect(() => {
+    // Fetch user profile to get latest joining date if missing
+    const fetchProfile = async () => {
+      if (!userInfo?._id) return;
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/profile/${userInfo._id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.joiningDate) {
+            setJoiningDate(data.joiningDate);
+          }
+          if (data.profileImage) {
+            setProfileImage(data.profileImage);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+      }
+    };
+    fetchProfile();
+  }, []);
 
   useEffect(() => {
     // Listen to profile image updates
@@ -380,6 +403,11 @@ function DashboardLayoutContent() {
               <div className="hidden md:flex flex-col items-end">
                 <span className="text-sm font-semibold text-gray-900">{userName}</span>
                 <span className="text-xs text-gray-500 capitalize">{role}</span>
+                {joiningDate && (
+                  <span className="text-[10px] text-gray-400">
+                    Joined: {new Date(joiningDate).toLocaleDateString('en-GB')}
+                  </span>
+                )}
               </div>
               <img 
                 src={profileImage || `https://api.dicebear.com/7.x/notionists/svg?seed=${userName.replace(' ', '')}&backgroundColor=f3f4f6`}

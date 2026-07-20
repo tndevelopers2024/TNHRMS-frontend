@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Users, Briefcase, X, ClipboardList, Settings2, Trash2, Edit2, Check, Wallet, User } from "lucide-react";
+import { Plus, Users, Briefcase, X, ClipboardList, Settings2, Trash2, Edit2, Check, Wallet, User, Search, Lock, Unlock } from "lucide-react";
 import { DatePicker } from "@/components/ui/DatePicker";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../context/ConfirmContext";
@@ -31,6 +31,9 @@ export default function AdminEmployees() {
     name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '',
     emergencyContact: { name: '', relationship: '', phone: '' }
   });
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
 
   useEffect(() => {
     fetchEmployees();
@@ -244,8 +247,41 @@ export default function AdminEmployees() {
     });
   };
 
+  const handleToggleLock = async (empId, currentStatus, e) => {
+    e.stopPropagation();
+    confirm({
+      title: currentStatus ? "Lock Employee" : "Unlock Employee",
+      message: `Are you sure you want to ${currentStatus ? 'lock' : 'unlock'} this employee? ${currentStatus ? 'They will not be able to log in.' : 'They will regain access to their account.'}`,
+      confirmText: currentStatus ? "Lock" : "Unlock",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/toggle-lock`, { method: 'PUT' });
+          if (res.ok) {
+            toast.success(`Employee ${currentStatus ? 'locked' : 'unlocked'} successfully`);
+            fetchEmployees();
+          } else {
+            const err = await res.json();
+            toast.error(err.message || 'Failed to toggle lock status');
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error('An error occurred');
+        }
+      }
+    });
+  };
+
+  // Filter employees
+  const filteredEmployees = employees.filter(emp => {
+    const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (emp.designation && emp.designation.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesDept = departmentFilter ? emp.department === departmentFilter : true;
+    return matchesSearch && matchesDept;
+  });
+
   // Group employees by department
-  const employeesByDepartment = employees.reduce((acc, emp) => {
+  const employeesByDepartment = filteredEmployees.reduce((acc, emp) => {
     const dept = emp.department || 'General';
     if (!acc[dept]) acc[dept] = [];
     acc[dept].push(emp);
@@ -270,6 +306,30 @@ export default function AdminEmployees() {
         </Button>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Input 
+            placeholder="Search employees by name, email or designation..." 
+            className="pl-9 bg-gray-50/50 border-gray-200"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="w-full sm:w-64">
+          <select 
+            className="flex h-10 w-full rounded-md border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+          >
+            <option value="">All Departments</option>
+            {departments.map(dept => (
+              <option key={dept._id} value={dept.name}>{dept.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {showAddForm && (
         <div className="fixed inset-0 !mt-0 z-50 flex items-start pt-10 justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
@@ -285,11 +345,11 @@ export default function AdminEmployees() {
                   {/* Basic Details */}
                   <div className="space-y-2">
                     <Label>Full Name</Label>
-                    <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. John Doe" />
+                    <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Name" />
                   </div>
                   <div className="space-y-2">
                     <Label>Email Address</Label>
-                    <Input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="john@example.com" />
+                    <Input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email" />
                   </div>
                   
                   {/* Work Details */}
@@ -389,16 +449,27 @@ export default function AdminEmployees() {
                   className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                   onClick={() => handleCardClick(emp._id)}
                 >
-                  <CardContent className="p-5 flex items-center space-x-4">
+                  <CardContent className="p-5 flex items-center space-x-4 relative">
                     <img 
                       src={`https://api.dicebear.com/7.x/notionists/svg?seed=${emp.name.replace(' ', '')}&backgroundColor=f3f4f6`}
                       alt={emp.name} 
-                      className="w-12 h-12 rounded-full border bg-gray-50"
+                      className={`w-12 h-12 rounded-full border ${emp.isActive === false ? 'opacity-50 grayscale' : 'bg-gray-50'}`}
                     />
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{emp.name}</h3>
-                      <p className="text-sm text-gray-500">{emp.designation}</p>
-                      <p className="text-xs text-primary mt-1">{emp.email}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h3 className={`font-semibold text-gray-900 truncate ${emp.isActive === false ? 'line-through text-gray-500' : ''}`}>{emp.name}</h3>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleToggleLock(emp._id, emp.isActive !== false, e)}
+                          className={`h-8 w-8 rounded-full hover:bg-gray-100 ${emp.isActive === false ? 'text-rose-500 hover:text-rose-600' : 'text-gray-400 hover:text-gray-600'}`}
+                          title={emp.isActive === false ? 'Unlock Employee' : 'Lock Employee'}
+                        >
+                          {emp.isActive === false ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                      <p className="text-sm text-gray-500 truncate">{emp.designation}</p>
+                      <p className="text-xs text-primary mt-1 truncate">{emp.email}</p>
                       {emp.pendingProfileUpdates && (
                         <div className="mt-2">
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800">

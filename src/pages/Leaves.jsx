@@ -15,6 +15,7 @@ export default function Leaves() {
   const [leaves, setLeaves] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState(null);
   const user = JSON.parse(localStorage.getItem('userInfo') || '{}');
 
   const [formData, setFormData] = useState({
@@ -22,7 +23,8 @@ export default function Leaves() {
     startDate: "",
     endDate: "",
     reason: "",
-    attachment: ""
+    attachment: "",
+    isHalfDay: false
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -37,6 +39,12 @@ export default function Leaves() {
       const attRes = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${user._id}`);
       const attData = await attRes.json();
       setAttendance(attData);
+
+      const profileRes = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/profile/${user._id}`);
+      if (profileRes.ok) {
+        const profileData = await profileRes.json();
+        setUserProfile(profileData);
+      }
     } catch (err) {
       console.error("Error fetching data:", err);
     } finally {
@@ -120,12 +128,15 @@ export default function Leaves() {
     }
 
     setSubmitting(true);
-    const days = calculateDays(formData.startDate, formData.endDate);
+    let days = calculateDays(formData.startDate, formData.endDate);
+    if (formData.isHalfDay) {
+      days = Math.max(0.5, days - 0.5);
+    }
 
     const balanceConfig = {
-      "Casual Leave": 10,
-      "Sick Leave": 10,
-      "Earned Leave": 15
+      "Casual Leave": 3,
+      "Sick Leave": 6,
+      "Earned Leave": userProfile?.earnedLeaves || 0
     };
 
     const maxDays = balanceConfig[formData.type];
@@ -158,7 +169,7 @@ export default function Leaves() {
         const newLeave = await res.json();
         setLeaves([newLeave, ...leaves]);
         setShowForm(false);
-        setFormData({ type: "Casual Leave", startDate: "", endDate: "", reason: "", attachment: "" });
+        setFormData({ type: "Casual Leave", startDate: "", endDate: "", reason: "", attachment: "", isHalfDay: false });
         toast.success("Leave applied successfully");
       } else {
         const errorData = await res.json();
@@ -225,197 +236,234 @@ export default function Leaves() {
       
     if (type === 'Casual Leave') {
       const autoLeaves = attendance.filter(a => a.status === 'Auto-Leave').length;
-      used += autoLeaves;
+      const halfLeaves = attendance.filter(a => a.status === 'Half-Day Leave').length;
+      used += autoLeaves + (halfLeaves * 0.5);
     }
     return used;
   };
 
   const leaveBalances = [
-    { type: "Casual Leave", total: 10, used: calcUsed("Casual Leave"), color: "bg-primary" },
-    { type: "Sick Leave", total: 10, used: calcUsed("Sick Leave"), color: "bg-rose-500" },
-    { type: "Earned Leave", total: 15, used: calcUsed("Earned Leave"), color: "bg-emerald-500" },
+    { type: "Casual Leave", total: 3, used: calcUsed("Casual Leave"), color: "bg-primary" },
+    { type: "Sick Leave", total: 6, used: calcUsed("Sick Leave"), color: "bg-rose-500" },
+    { type: "Earned Leave", total: userProfile?.earnedLeaves || 0, used: calcUsed("Earned Leave"), color: "bg-emerald-500" },
   ];
 
+  let calculatedDays = 0;
+  if (formData.startDate && formData.endDate) {
+    calculatedDays = calculateDays(formData.startDate, formData.endDate);
+    if (formData.isHalfDay) {
+      calculatedDays = Math.max(0.5, calculatedDays - 0.5);
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Leave Management</h1>
-          <p className="text-muted-foreground mt-1">Track your balances and apply for leaves.</p>
-        </div>
-        <Button onClick={() => setShowForm(!showForm)} variant={showForm ? "outline" : "default"} className={!showForm ? "bg-primary text-white" : ""}>
-          {showForm ? "Cancel" : <><Plus className="w-4 h-4 mr-2" /> Apply Leave</>}
-        </Button>
-      </div>
-
-      {/* Leave Balance Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {leaveBalances.map((leave, i) => {
-          const percentage = Math.min((leave.used / leave.total) * 100, 100);
-          return (
-            <Card key={i} className="border-0 shadow-sm">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold text-gray-700">{leave.type}</h3>
-                  <div className="p-2 bg-gray-50 rounded-xl">
-                    <FileText className="w-5 h-5 text-gray-500" />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-end text-sm">
-                    <span className="text-3xl font-bold text-gray-900">{leave.total - leave.used}</span>
-                    <span className="text-muted-foreground font-medium mb-1">/ {leave.total} left</span>
-                  </div>
-                  <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full ${leave.color} rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }}></div>
-                  </div>
-                  <p className="text-xs text-muted-foreground text-right">{leave.used} days used</p>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-
-      {/* Apply Leave Form */}
-      {showForm && (
-        <Card className="border-0 shadow-sm bg-gray-50/50 animate-in slide-in-from-top-4 fade-in duration-300">
-          <CardHeader>
-            <CardTitle>New Leave Application</CardTitle>
-            <CardDescription>Fill out the details to request time off.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleApplyLeave} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Leave Type</Label>
-                  <select 
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                    className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                  >
-                    <option>Casual Leave</option>
-                    <option>Sick Leave</option>
-                    <option>Earned Leave</option>
-                    <option>Loss of Pay</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Attachment (Optional) - Max 2MB</Label>
-                  <Input type="file" className="bg-white" onChange={handleFileChange} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <DatePicker 
-                    value={formData.startDate}
-                    onChange={(val) => setFormData({...formData, startDate: val})}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>End Date</Label>
-                  <DatePicker 
-                    value={formData.endDate}
-                    onChange={(val) => setFormData({...formData, endDate: val})}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Reason</Label>
-                <Textarea 
-                  placeholder="Please describe the reason for your leave..." 
-                  className="bg-white min-h-[100px]" 
-                  required
-                  value={formData.reason}
-                  onChange={(e) => setFormData({...formData, reason: e.target.value})}
-                />
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="gradient" className="px-8 shadow-md" disabled={submitting}>
-                  {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Submit Request
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Leave History Table */}
-      <Card className="border-0 shadow-sm overflow-hidden">
-        <CardHeader className="bg-white border-b border-gray-50 flex flex-row items-center justify-between pb-4">
-          <CardTitle>Leave History</CardTitle>
-          <Button onClick={exportLeaveCSV} variant="outline" size="sm" className="h-9 text-emerald-600 border-emerald-200 hover:bg-emerald-50 mt-0">
-            <Download className="h-4 w-4 mr-2" /> Export
+    <>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Leave Management</h1>
+            <p className="text-muted-foreground mt-1">Track your balances and apply for leaves.</p>
+          </div>
+          <Button onClick={() => setShowForm(!showForm)} variant={showForm ? "outline" : "default"} className={!showForm ? "bg-primary text-white" : ""}>
+            {showForm ? "Cancel" : <><Plus className="w-4 h-4 mr-2" /> Apply Leave</>}
           </Button>
-        </CardHeader>
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            </div>
-          ) : leaves.length > 0 ? (
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-gray-500 uppercase bg-gray-50/80">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Leave Type</th>
-                  <th className="px-6 py-4 font-medium">Duration</th>
-                  <th className="px-6 py-4 font-medium">Days</th>
-                  <th className="px-6 py-4 font-medium">Reason</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4 font-medium text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {leaves.map((row) => (
-                  <tr key={row._id} className="bg-white hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-gray-900">{row.type}</td>
-                    <td className="px-6 py-4 text-gray-600">
-                      <div className="flex items-center">
-                        <Calendar className="w-3 h-3 mr-2 text-gray-400" />
-                        {new Date(row.startDate).toLocaleDateString('en-GB')} - {new Date(row.endDate).toLocaleDateString('en-GB')}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{row.days}</td>
-                    <td className="px-6 py-4 text-gray-600 truncate max-w-[200px]" title={row.reason}>{row.reason}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                        row.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
-                        row.status === 'Rejected' ? 'bg-rose-100 text-rose-700' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>
-                        {row.status === 'Approved' && <CheckCircle className="w-3 h-3 mr-1" />}
-                        {row.status === 'Rejected' && <XCircle className="w-3 h-3 mr-1" />}
-                        {row.status === 'Pending' && <Clock className="w-3 h-3 mr-1" />}
-                        {row.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {canCancel(row.startDate) ? (
-                        <Button variant="ghost" size="sm" onClick={() => handleCancelLeave(row._id)} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-8 px-2">
-                          Cancel
-                        </Button>
-                      ) : (
-                        <span className="text-gray-400 text-xs italic">N/A</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="py-16 text-center">
-              <FileText className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900">No leave history</h3>
-              <p className="text-gray-500 mt-1">You haven't requested any leaves yet.</p>
-            </div>
-          )}
         </div>
-      </Card>
-    </div>
+
+        {/* Leave Balance Cards */}
+        <div className="grid gap-6 md:grid-cols-3">
+          {leaveBalances.map((leave, i) => {
+            const percentage = Math.min((leave.used / leave.total) * 100, 100);
+            return (
+              <Card key={i} className="border-0 shadow-sm">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-gray-700">{leave.type}</h3>
+                    <div className="p-2 bg-gray-50 rounded-xl">
+                      <FileText className="w-5 h-5 text-gray-500" />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-end text-sm">
+                      <span className="text-3xl font-bold text-gray-900">{leave.total - leave.used}</span>
+                      <span className="text-muted-foreground font-medium mb-1">/ {leave.total} left</span>
+                    </div>
+                    <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${leave.color} rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }}></div>
+                    </div>
+                    <p className="text-xs text-muted-foreground text-right">{leave.used} days used</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        {/* Leave History Table */}
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <CardHeader className="bg-white border-b border-gray-50 flex flex-row items-center justify-between pb-4">
+            <CardTitle>Leave History</CardTitle>
+            <Button onClick={exportLeaveCSV} variant="outline" size="sm" className="h-9 text-emerald-600 border-emerald-200 hover:bg-emerald-50 mt-0">
+              <Download className="h-4 w-4 mr-2" /> Export
+            </Button>
+          </CardHeader>
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              </div>
+            ) : leaves.length > 0 ? (
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase bg-gray-50/80">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">Leave Type</th>
+                    <th className="px-6 py-4 font-medium">Duration</th>
+                    <th className="px-6 py-4 font-medium">Days</th>
+                    <th className="px-6 py-4 font-medium">Reason</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4 font-medium text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {leaves.map((row) => (
+                    <tr key={row._id} className="bg-white hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-gray-900">{row.type}</td>
+                      <td className="px-6 py-4 text-gray-600">
+                        <div className="flex items-center">
+                          <Calendar className="w-3 h-3 mr-2 text-gray-400" />
+                          {new Date(row.startDate).toLocaleDateString('en-GB')} - {new Date(row.endDate).toLocaleDateString('en-GB')}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{row.days}</td>
+                      <td className="px-6 py-4 text-gray-600 truncate max-w-[200px]" title={row.reason}>{row.reason}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                          row.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+                          row.status === 'Rejected' ? 'bg-rose-100 text-rose-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                          {row.status === 'Approved' && <CheckCircle className="w-3 h-3 mr-1" />}
+                          {row.status === 'Rejected' && <XCircle className="w-3 h-3 mr-1" />}
+                          {row.status === 'Pending' && <Clock className="w-3 h-3 mr-1" />}
+                          {row.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {canCancel(row.startDate) ? (
+                          <Button variant="ghost" size="sm" onClick={() => handleCancelLeave(row._id)} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-8 px-2">
+                            Cancel
+                          </Button>
+                        ) : (
+                          <span className="text-gray-400 text-xs italic">N/A</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="py-16 text-center">
+                <FileText className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900">No leave history</h3>
+                <p className="text-gray-500 mt-1">You haven't requested any leaves yet.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Apply Leave Form Modal */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-300">
+          <Card className="w-full max-w-3xl border-0 shadow-lg bg-white relative animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-start justify-between pb-4">
+              <div className="space-y-1.5">
+                <CardTitle>New Leave Application</CardTitle>
+                <CardDescription>Fill out the details to request time off.</CardDescription>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleApplyLeave} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label>Leave Type</Label>
+                    <select 
+                      value={formData.type}
+                      onChange={(e) => setFormData({...formData, type: e.target.value})}
+                      className="flex h-10 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    >
+                      <option>Casual Leave</option>
+                      <option>Sick Leave</option>
+                      <option>Earned Leave</option>
+                      <option>Loss of Pay</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Attachment (Optional) - Max 2MB</Label>
+                    <Input type="file" className="bg-white" onChange={handleFileChange} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Start Date</Label>
+                    <DatePicker 
+                      value={formData.startDate}
+                      onChange={(val) => setFormData({...formData, startDate: val})}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>End Date</Label>
+                    <DatePicker 
+                      value={formData.endDate}
+                      onChange={(val) => setFormData({...formData, endDate: val})}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-1 md:col-span-2 flex items-center justify-between bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    <div className="flex items-center space-x-3">
+                      <input 
+                        type="checkbox" 
+                        id="halfDay"
+                        checked={formData.isHalfDay}
+                        onChange={(e) => setFormData({...formData, isHalfDay: e.target.checked})}
+                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                      />
+                      <Label htmlFor="halfDay" className="cursor-pointer font-medium text-gray-700">Apply as Half Day</Label>
+                    </div>
+                    <div className="text-sm font-medium text-blue-900 flex items-center gap-2">
+                      Total Leave Days: <span className="font-bold text-xl bg-white px-3 py-1 rounded-md shadow-sm border border-blue-50">{calculatedDays}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Reason</Label>
+                  <Textarea 
+                    placeholder="Please describe the reason for your leave..." 
+                    className="bg-white min-h-[100px]" 
+                    required
+                    value={formData.reason}
+                    onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="gradient" className="px-8 shadow-md" disabled={submitting}>
+                    {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Submit Request
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </>
   )
 }

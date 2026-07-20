@@ -454,7 +454,7 @@ export default function Dashboard() {
 
       {/* Early Checkout Warning Modal */}
       {showEarlyCheckoutWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95">
             <div className="p-6 text-center space-y-4">
               <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 mt-2">
@@ -481,7 +481,7 @@ export default function Dashboard() {
 
       {/* Checkout Modal */}
       {status === 'before_checkout' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
+        <div className="fixed inset-0 !mt-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
             <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-rose-50/30">
               <h2 className="text-xl font-bold text-gray-900">End of Day Check-Out</h2>
