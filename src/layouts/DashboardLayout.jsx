@@ -287,7 +287,7 @@ function DashboardLayoutContent() {
 
       {/* Left Sidebar */}
       <aside 
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-100 shadow-sm transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white/80 backdrop-blur-xl border-r border-primary/10 shadow-[4px_0_24px_rgba(72,83,253,0.05)] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto flex flex-col ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -295,39 +295,41 @@ function DashboardLayoutContent() {
           <img src="/logo.png" alt="Logo" className="h-10" />
         </div>
         
-        <nav className="p-4 space-y-1 overflow-y-auto h-[calc(100vh-5rem)]">
-          {sidebarLinks.map((link) => {
-            const Icon = link.icon;
-            const isActive = location.pathname.startsWith(link.path);
-            
-            return (
-              <Link
-                key={link.name}
-                to={link.path}
-                className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group ${
-                  isActive 
-                    ? 'bg-primary/10 text-primary' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-primary'
-                }`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <Icon className={`w-5 h-5 mr-3 ${isActive ? 'text-primary' : 'text-gray-400 group-hover:text-primary'}`} />
-                {link.name}
-              </Link>
-            )
-          })}
+        <nav className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="space-y-1.5">
+            {sidebarLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive = location.pathname.startsWith(link.path);
+              
+              return (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  className={`flex items-center px-4 py-3.5 text-sm font-semibold rounded-2xl transition-all duration-300 ease-out group ${
+                    isActive 
+                      ? 'bg-gradient-to-r from-primary to-[#905EFF] text-white shadow-lg shadow-primary/25 translate-x-1' 
+                      : 'text-gray-500 hover:bg-primary/5 hover:text-primary hover:translate-x-1'
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <Icon className={`w-5 h-5 mr-3 transition-colors duration-300 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-primary'}`} />
+                  {link.name}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
 
-          <div className="pt-8 mt-8 border-t border-gray-100">
+          <div className="p-4 mt-auto border-t border-primary/10 bg-white/50">
             <Link
               to="/login"
               onClick={() => localStorage.removeItem('userInfo')}
-              className="flex items-center px-4 py-3 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+              className="flex items-center justify-center w-full px-4 py-3.5 text-sm font-semibold text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-2xl transition-all duration-300 shadow-sm hover:shadow-md hover:shadow-rose-500/20"
             >
-              <LogOut className="w-5 h-5 mr-3" />
+              <LogOut className="w-5 h-5 mr-2" />
               Logout
             </Link>
           </div>
-        </nav>
       </aside>
 
       {/* Main Content Area */}

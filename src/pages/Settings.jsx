@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Image as ImageIcon, Camera, Trash2 } from "lucide-react";
+import { Lock, Image as ImageIcon, Camera, Trash2, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function Settings() {
   const [userInfo, setUserInfo] = useState(JSON.parse(localStorage.getItem('userInfo') || '{}'));
@@ -11,6 +11,11 @@ export default function Settings() {
   // Password State
   const [passwords, setPasswords] = useState({ current: '', new: '', confirm: '' });
   const [passMessage, setPassMessage] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   
   // Profile Image State
   const [profileImage, setProfileImage] = useState(userInfo.profileImage || '');
@@ -23,6 +28,7 @@ export default function Settings() {
       setPassMessage('New passwords do not match');
       return;
     }
+    setIsUpdating(true);
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/update-password/${userInfo._id}`, {
         method: 'PUT',
@@ -38,6 +44,8 @@ export default function Settings() {
       }
     } catch (err) {
       setPassMessage('Network error occurred');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -160,30 +168,60 @@ export default function Settings() {
             <form onSubmit={handlePasswordChange} className="space-y-4">
               <div className="space-y-2">
                 <Label>Current Password</Label>
-                <Input 
-                  type="password" 
-                  required
-                  value={passwords.current}
-                  onChange={(e) => setPasswords({...passwords, current: e.target.value})}
-                />
+                <div className="relative">
+                  <Input 
+                    type={showCurrent ? "text" : "password"} 
+                    required
+                    className="pr-10"
+                    value={passwords.current}
+                    onChange={(e) => setPasswords({...passwords, current: e.target.value})}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowCurrent(!showCurrent)} 
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>New Password</Label>
-                <Input 
-                  type="password" 
-                  required
-                  value={passwords.new}
-                  onChange={(e) => setPasswords({...passwords, new: e.target.value})}
-                />
+                <div className="relative">
+                  <Input 
+                    type={showNew ? "text" : "password"} 
+                    required
+                    className="pr-10"
+                    value={passwords.new}
+                    onChange={(e) => setPasswords({...passwords, new: e.target.value})}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowNew(!showNew)} 
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Confirm New Password</Label>
-                <Input 
-                  type="password" 
-                  required
-                  value={passwords.confirm}
-                  onChange={(e) => setPasswords({...passwords, confirm: e.target.value})}
-                />
+                <div className="relative">
+                  <Input 
+                    type={showConfirm ? "text" : "password"} 
+                    required
+                    className="pr-10"
+                    value={passwords.confirm}
+                    onChange={(e) => setPasswords({...passwords, confirm: e.target.value})}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowConfirm(!showConfirm)} 
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               
               {passMessage && (
@@ -192,7 +230,16 @@ export default function Settings() {
                 </p>
               )}
               
-              <Button type="submit" className="w-full">Update Password</Button>
+              <Button type="submit" className="w-full" disabled={isUpdating}>
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Password"
+                )}
+              </Button>
             </form>
           </CardContent>
         </Card>
