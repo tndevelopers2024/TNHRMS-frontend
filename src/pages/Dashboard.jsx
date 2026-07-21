@@ -36,6 +36,7 @@ export default function Dashboard() {
   // Announcements & Payslip
   const [announcements, setAnnouncements] = useState([]);
   const [latestPayslip, setLatestPayslip] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -115,6 +116,20 @@ export default function Dashboard() {
       }
     };
 
+    const fetchProfile = async () => {
+      const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+      if (!userInfo || !userInfo._id) return;
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/profile/${userInfo._id}`);
+        if (res.ok) {
+          const profileData = await res.json();
+          setUserProfile(profileData);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     const fetchUpcomingHoliday = async () => {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/holidays/upcoming`);
@@ -131,6 +146,7 @@ export default function Dashboard() {
     fetchAnnouncements();
     fetchPayslip();
     fetchUpcomingHoliday();
+    fetchProfile();
   }, []);
 
   useEffect(() => {
@@ -288,10 +304,11 @@ export default function Dashboard() {
   };
 
   const getLeaveStats = () => {
+    const earnedLeavesCount = userProfile?.earnedLeaves || 0;
     const stats = {
-      'Casual Leave': { used: 0, available: 10 },
-      'Sick Leave': { used: 0, available: 10 },
-      'Earned Leave': { used: 0, available: 15 }
+      'Casual Leave': { used: 0, available: 3 },
+      'Sick Leave': { used: 0, available: 6 },
+      'Earned Leave': { used: 0, available: earnedLeavesCount }
     };
     
     // Count approved leaves
@@ -323,7 +340,7 @@ export default function Dashboard() {
   const attendanceData = getWeeklyAttendanceData();
   const leaveData = getLeaveStats();
   const totalWeeklyHours = attendanceData.reduce((acc, curr) => acc + curr.hours, 0);
-  const totalLeavesUsed = leaveData.reduce((acc, curr) => acc + curr.used, 0);
+  const totalLeavesAvailable = leaveData.reduce((acc, curr) => acc + curr.available, 0);
 
   const widgets = [
     { 
@@ -344,8 +361,8 @@ export default function Dashboard() {
     },
     { 
       title: "Leave Balance", 
-      value: `${35 - totalLeavesUsed} Days`, 
-      subtitle: "Total available (35 yearly)", 
+      value: `${totalLeavesAvailable} Days`, 
+      subtitle: `Casual: ${leaveData[0].available} | Sick: ${leaveData[1].available} | Earned: ${leaveData[2].available}`, 
       icon: FileText,
       color: "text-amber-500",
       bg: "bg-amber-50"
