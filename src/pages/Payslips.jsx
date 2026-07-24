@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, Eye, QrCode, X } from "lucide-react";
+import { useSocket } from "../context/SocketContext";
 
 export default function Payslips() {
   const [selectedPayslip, setSelectedPayslip] = useState(null);
@@ -9,13 +10,30 @@ export default function Payslips() {
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
   
   useEffect(() => {
+    fetchPayslips();
+  }, []);
+
+  const fetchPayslips = () => {
     if (userInfo._id) {
       fetch(`${import.meta.env.VITE_API_URL}/api/employee/payslips/${userInfo._id}`)
         .then(res => res.json())
         .then(data => setPayslips(data))
         .catch(err => console.error(err));
     }
-  }, []);
+  };
+
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      if (notif.type === 'payroll_generated') {
+        fetchPayslips();
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket]);
 
   const isMonthEnded = (monthStr) => {
     if (!monthStr) return false;

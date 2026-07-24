@@ -213,7 +213,7 @@ export default function Attendance() {
                               {record.status === 'Auto-Leave' ? 'Leave' : record.status === 'Half-Day Leave' ? 'Half Day' : record.checkOutTime ? 'Present' : 'Working'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-gray-500 max-w-[250px] truncate" title={record.summary || ''}>
+                          <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
                             {record.summary || '-'}
                           </td>
                         </tr>

@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import { Plus, Calendar, Trash2, Pencil } from "lucide-react";
 import { useConfirm } from "../../context/ConfirmContext";
 import toast from "react-hot-toast";
+import { useSocket } from "../../context/SocketContext";
 
 export default function AdminHolidays() {
   const { confirm } = useConfirm();
@@ -19,6 +20,18 @@ export default function AdminHolidays() {
   const [date, setDate] = useState('');
   const [type, setType] = useState('National');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      if (notif.type === 'holiday_updated') {
+        fetchHolidays();
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket]);
 
   const fetchHolidays = () => {
     fetch(`${import.meta.env.VITE_API_URL}/api/admin/holidays`)

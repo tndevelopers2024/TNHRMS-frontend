@@ -8,6 +8,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { DocumentViewerModal } from "../components/DocumentViewerModal";
 import { User, Mail, Phone, MapPin, Briefcase, Calendar, Shield, Edit3, Upload, File, Save, Download, ExternalLink } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { useSocket } from "../context/SocketContext";
 
 export default function Profile() {
   const [profileData, setProfileData] = useState(null);
@@ -63,6 +64,19 @@ export default function Profile() {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      if (notif.type === 'profile_update') {
+        fetchProfile();
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket]);
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -219,7 +233,48 @@ export default function Profile() {
         )}
       </div>
 
-      {profileData.pendingProfileUpdates && !isEditing && (
+      {profileData.documentStatus === 'Pending Upload' && !isEditing && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl flex items-start mb-6 animate-in fade-in">
+           <svg className="w-5 h-5 text-rose-500 mt-0.5 mr-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h3 className="font-semibold text-sm">Action Required: Document Upload</h3>
+            <p className="text-sm mt-1 text-rose-700/90">Please upload your required identity and educational documents. Your account is restricted until an admin reviews and approves your documents.</p>
+          </div>
+        </div>
+      )}
+      
+      {profileData.documentStatus === 'Pending Approval' && !isEditing && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-xl flex items-start mb-6 animate-in fade-in">
+           <svg className="w-5 h-5 text-blue-500 mt-0.5 mr-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h3 className="font-semibold text-sm">Documents Under Review</h3>
+            <p className="text-sm mt-1 text-blue-700/90">Your uploaded documents are currently being reviewed by an admin. You will gain full access to the dashboard once approved.</p>
+          </div>
+        </div>
+      )}
+
+      {profileData.documentStatus === 'Rejected' && !isEditing && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl flex items-start mb-6 animate-in fade-in">
+           <svg className="w-5 h-5 text-rose-500 mt-0.5 mr-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <h3 className="font-semibold text-sm">Documents Rejected</h3>
+            <p className="text-sm mt-1 text-rose-700/90">Your previous document submission was rejected. Please review your details and re-upload the correct documents.</p>
+            {profileData.rejectionReason && (
+              <div className="mt-2 p-3 bg-white/60 rounded-lg border border-rose-100 text-sm italic">
+                <span className="font-semibold not-italic">Admin Comments: </span>{profileData.rejectionReason}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {profileData.pendingProfileUpdates && profileData.documentStatus === 'Approved' && !isEditing && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl flex items-start animate-in fade-in">
           <svg className="w-5 h-5 text-amber-500 mt-0.5 mr-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -252,7 +307,7 @@ export default function Profile() {
             <div className="mt-6 space-y-3">
               <div className="flex items-center text-xs text-gray-600">
                 <Briefcase className="w-3 h-3 mr-3 text-gray-400" />
-                <span>EMP-{profileData._id.slice(-5).toUpperCase()}</span>
+                <span>{profileData.employeeId || `EMP-${profileData._id.slice(-5).toUpperCase()}`}</span>
               </div>
               <div className="flex items-center text-xs text-gray-600">
                 <Mail className="w-3 h-3 mr-3 text-gray-400" />
@@ -263,6 +318,17 @@ export default function Profile() {
                 <span>{profileData.phone || 'N/A'}</span>
               </div>
             </div>
+
+            {profileData?.documents?.offerLetter && (
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <button
+                  onClick={(e) => { e.preventDefault(); setViewerData({ isOpen: true, url: profileData.documents.offerLetter }); }}
+                  className="w-full flex items-center justify-center px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Download className="w-4 h-4 mr-2" /> View Offer Letter
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -459,7 +525,7 @@ export default function Profile() {
                       {renderFileUploader('relievingLetter', 'Relieving Letter', 'From last employer')}
                       {renderFileUploader('experienceCertificate', 'Experience Certificate', '')}
                       {renderFileUploader('salarySlip', 'Last 3 Months Salary Slips', 'Combined in one PDF preferably')}
-                      {renderFileUploader('offerLetter', 'Previous Offer Letter', '(Optional)')}
+                      {renderFileUploader('previousOfferLetter', 'Previous Offer Letter', '(Optional)')}
                     </div>
                   </div>
 

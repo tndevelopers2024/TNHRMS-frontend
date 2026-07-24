@@ -59,6 +59,7 @@ function DashboardLayoutContent() {
   const dropdownRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const socket = useSocket();
 
   const userInfoString = localStorage.getItem('userInfo');
   
@@ -73,6 +74,11 @@ function DashboardLayoutContent() {
   const sidebarLinks = role === 'admin' ? adminLinks : employeeLinks;
   const [profileImage, setProfileImage] = useState(userInfo?.profileImage || '');
   const [joiningDate, setJoiningDate] = useState(userInfo?.joiningDate || null);
+  const [documentStatus, setDocumentStatus] = useState(userInfo?.documentStatus || 'Approved');
+
+  const availableLinks = (role === 'employee' && documentStatus !== 'Approved')
+    ? sidebarLinks.filter(link => link.path === '/profile')
+    : sidebarLinks;
 
   useEffect(() => {
     // Fetch user profile to get latest joining date if missing
@@ -88,6 +94,11 @@ function DashboardLayoutContent() {
           if (data.profileImage) {
             setProfileImage(data.profileImage);
           }
+          if (data.documentStatus) {
+            setDocumentStatus(data.documentStatus);
+            const updatedUser = { ...userInfo, documentStatus: data.documentStatus };
+            localStorage.setItem('userInfo', JSON.stringify(updatedUser));
+          }
         }
       } catch (err) {
         console.error("Error fetching profile:", err);
@@ -95,6 +106,32 @@ function DashboardLayoutContent() {
     };
     fetchProfile();
   }, []);
+
+  useEffect(() => {
+    if (role === 'employee' && documentStatus !== 'Approved' && location.pathname !== '/profile') {
+      navigate('/profile', { replace: true });
+      toast.error('Please complete your profile and wait for admin approval to access other pages.', { id: 'auth-restrict' });
+    }
+  }, [role, documentStatus, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleAccountLocked = (data) => {
+      toast.error(data.message || 'Your account has been locked by the admin.');
+      localStorage.removeItem('token');
+      localStorage.removeItem('userInfo');
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 1500);
+    };
+
+    socket.on('account_locked', handleAccountLocked);
+
+    return () => {
+      socket.off('account_locked', handleAccountLocked);
+    };
+  }, [socket, navigate]);
 
   useEffect(() => {
     // Listen to profile image updates
@@ -110,11 +147,21 @@ function DashboardLayoutContent() {
 
   // Check if user has checked in today
   useEffect(() => {
+    let isActive = true;
+
+    if (role === 'employee' && documentStatus !== 'Approved') {
+      setShowCheckInModal(false);
+      return;
+    }
+
     const checkAttendance = async () => {
       if (!userInfo || !userInfo._id) return;
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${userInfo._id}`);
+        if (!isActive) return;
+
         const data = await res.json();
+        if (!isActive) return;
         
         if (Array.isArray(data)) {
           const now = new Date();
@@ -123,17 +170,23 @@ function DashboardLayoutContent() {
           
           if (!todayRecord) {
             setTimeout(() => {
-              setShowCheckInModal(true);
+              if (isActive) {
+                setShowCheckInModal(true);
+              }
             }, 500); // Slight delay for better UX on entry
           }
         }
       } catch (err) {
-        console.error("Error checking attendance status:", err);
+        if (isActive) console.error("Error checking attendance status:", err);
       }
     };
     
     checkAttendance();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [role, documentStatus, userInfo?._id]);
 
   // Fetch notifications
   useEffect(() => {
@@ -224,12 +277,12 @@ function DashboardLayoutContent() {
     }
   };
 
-  const socket = useSocket();
-
   useEffect(() => {
     if (!socket) return;
 
     const handleNotification = (data) => {
+      if (!data.message) return;
+
       setNotifications(prev => [{
         id: Date.now(),
         message: data.message,
@@ -297,7 +350,7 @@ function DashboardLayoutContent() {
         
         <nav className="p-4 flex-1 overflow-y-auto custom-scrollbar">
           <div className="space-y-1.5">
-            {sidebarLinks.map((link) => {
+            {availableLinks.map((link) => {
               const Icon = link.icon;
               const isActive = location.pathname.startsWith(link.path);
               

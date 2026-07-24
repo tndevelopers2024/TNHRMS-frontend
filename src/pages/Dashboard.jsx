@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import toast from "react-hot-toast";
+import { useSocket } from "../context/SocketContext";
 
 export default function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -37,11 +38,37 @@ export default function Dashboard() {
   const [announcements, setAnnouncements] = useState([]);
   const [latestPayslip, setLatestPayslip] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  
+  // Refresh trigger state
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      // Re-fetch dashboard data when relevant events occur
+      if ([
+        'attendance_update', 
+        'leave_requested', 
+        'leave_approved', 
+        'leave_rejected',
+        'work_assigned',
+        'work_status_updated',
+        'profile_update',
+        'payroll_generated'
+      ].includes(notif.type)) {
+        setRefreshKey(prev => prev + 1);
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket]);
 
   useEffect(() => {
     const fetchAttendance = async () => {
@@ -142,12 +169,13 @@ export default function Dashboard() {
       }
     };
 
+    fetchAttendance();
     fetchLeaves();
     fetchAnnouncements();
     fetchPayslip();
     fetchUpcomingHoliday();
     fetchProfile();
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     let interval;

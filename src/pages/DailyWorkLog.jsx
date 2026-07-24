@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ClipboardList, Clock, CheckCircle, RefreshCcw, X, Edit2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { useSocket } from "../context/SocketContext";
 
 export default function DailyWorkLog() {
   const [tasks, setTasks] = useState([]);
@@ -32,6 +33,8 @@ export default function DailyWorkLog() {
       setLoading(false);
     }
   };
+
+  const socket = useSocket();
 
   useEffect(() => {
     fetchTasks();

@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, FileText, CheckCircle, Clock, XCircle, Plus, Loader2, Download } from "lucide-react";
-import { DatePicker } from "@/components/ui/DatePicker";
 import toast from "react-hot-toast";
 import { useConfirm } from "../context/ConfirmContext";
+import { useSocket } from "../context/SocketContext";
 
 export default function Leaves() {
   const { confirm } = useConfirm();
@@ -27,6 +27,22 @@ export default function Leaves() {
     isHalfDay: false
   });
   const [submitting, setSubmitting] = useState(false);
+  const socket = useSocket();
+
+  useEffect(() => {
+    fetchLeaves();
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      if (['leave_approved', 'leave_rejected'].includes(notif.type)) {
+        fetchLeaves();
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket]);
 
   // Fetch leaves and attendance from backend
   const fetchLeaves = async () => {
@@ -56,14 +72,20 @@ export default function Leaves() {
     fetchLeaves();
   }, []);
 
-  // Calculate days between two dates
   const calculateDays = (start, end) => {
     const s = new Date(start);
     const e = new Date(end);
     if (isNaN(s) || isNaN(e)) return 0;
-    const diffTime = Math.abs(e - s);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
-    return diffDays;
+    
+    let days = 0;
+    let current = new Date(s);
+    while (current <= e) {
+      if (current.getDay() !== 0) { // 0 is Sunday
+        days++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    return days;
   };
 
   const exportLeaveCSV = () => {

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Users, Activity, FileText, Search, Clock, Download, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../context/ConfirmContext";
+import { useSocket } from "../../context/SocketContext";
 
 export default function AdminAttendance() {
   const [activeTab, setActiveTab] = useState('today'); // 'today' or 'reports'
@@ -23,10 +24,26 @@ export default function AdminAttendance() {
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedMonth, setSelectedMonth] = useState('All');
 
+  const socket = useSocket();
+
   useEffect(() => {
     fetchTodayAttendance();
     fetchEmployees();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      if (notif.type === 'attendance_update') {
+        fetchTodayAttendance();
+        if (activeTab === 'reports' && selectedEmployeeId) {
+          fetchEmployeeAttendance(selectedEmployeeId);
+        }
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket, activeTab, selectedEmployeeId]);
 
   const fetchTodayAttendance = async () => {
     setLoading(true);
@@ -488,7 +505,7 @@ export default function AdminAttendance() {
                                   {record.status === 'Auto-Leave' ? 'Leave' : record.checkOutTime ? 'Present' : 'Working'}
                                 </span>
                               </td>
-                              <td className="px-6 py-4 text-gray-500 max-w-[200px] truncate" title={record.summary || ''}>
+                              <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
                                 {record.summary || '-'}
                               </td>
                               <td className="px-6 py-4 text-right">

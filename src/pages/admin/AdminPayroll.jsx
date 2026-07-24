@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MonthPicker } from "@/components/ui/MonthPicker";
 import toast from "react-hot-toast";
+import { useSocket } from "../../context/SocketContext";
 
 export default function AdminPayroll() {
   const [payrollData, setPayrollData] = useState([]);
@@ -16,9 +17,22 @@ export default function AdminPayroll() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  const socket = useSocket();
+
   useEffect(() => {
     fetchPayrollData();
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      if (notif.type === 'payroll_generated') {
+        fetchPayrollData();
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket, selectedDate]);
 
   const fetchPayrollData = async () => {
     setLoading(true);

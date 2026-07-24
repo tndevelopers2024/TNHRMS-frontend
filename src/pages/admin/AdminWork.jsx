@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Search, Plus, CheckCircle, Clock, X, ClipboardList, Briefcase, Edit2, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../context/ConfirmContext";
+import { useSocket } from "../../context/SocketContext";
 
 export default function AdminWork() {
   const { confirm } = useConfirm();
@@ -27,10 +28,30 @@ export default function AdminWork() {
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editTaskDescription, setEditTaskDescription] = useState("");
 
+  const socket = useSocket();
+
   useEffect(() => {
     fetchEmployees();
     fetchDepartments();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotif = (notif) => {
+      if (notif.type === 'work_status_updated') {
+        fetchEmployees();
+        if (isModalOpen && selectedEmployee) {
+          // Re-fetch employee tasks directly to update the modal
+          fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${selectedEmployee._id}/details`)
+            .then(res => res.json())
+            .then(data => setEmployeeTasks(data.tasks || []))
+            .catch(err => console.error(err));
+        }
+      }
+    };
+    socket.on('notification', handleNotif);
+    return () => socket.off('notification', handleNotif);
+  }, [socket, isModalOpen, selectedEmployee]);
 
   const fetchDepartments = async () => {
     try {

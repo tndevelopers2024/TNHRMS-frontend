@@ -7,10 +7,12 @@ import { Plus, Users, Briefcase, X, ClipboardList, Settings2, Trash2, Edit2, Che
 import { DatePicker } from "@/components/ui/DatePicker";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../context/ConfirmContext";
+import { useSocket } from "../../context/SocketContext";
 import { DocumentViewerModal } from "../../components/DocumentViewerModal";
 
 export default function AdminEmployees() {
   const { confirm } = useConfirm();
+  const socket = useSocket();
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -39,6 +41,17 @@ export default function AdminEmployees() {
     fetchEmployees();
     fetchDepartments();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleNotification = (notif) => {
+      if (notif.type === 'profile_update' || notif.type === 'employee_registered') {
+        fetchEmployees();
+      }
+    };
+    socket.on('notification', handleNotification);
+    return () => socket.off('notification', handleNotification);
+  }, [socket]);
 
   const fetchDepartments = async () => {
     try {
@@ -96,6 +109,34 @@ export default function AdminEmployees() {
     } catch (err) {
       console.error("Error updating department:", err);
     }
+  };
+
+  const handleOfferLetterUpload = async (e, empId) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('offerLetter', file);
+
+    const toastId = toast.loading('Uploading offer letter...');
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/offer-letter`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        toast.success('Offer letter uploaded successfully', { id: toastId });
+        handleCardClick(empId);
+      } else {
+        const data = await res.json();
+        toast.error(data.message || 'Failed to upload', { id: toastId });
+      }
+    } catch (err) {
+      toast.error('An error occurred', { id: toastId });
+      console.error(err);
+    }
+    // reset file input
+    e.target.value = null;
   };
 
   const handleAddDepartment = async (e) => {
@@ -165,11 +206,17 @@ export default function AdminEmployees() {
   const handleRejectProfile = async (empId) => {
     confirm({
       title: "Reject Updates",
-      message: "Are you sure you want to reject these profile changes? They will be permanently discarded.",
+      message: "Are you sure you want to reject these profile changes? Please provide a reason.",
       confirmText: "Reject",
-      action: async () => {
+      showInput: true,
+      inputPlaceholder: "Reason for rejection...",
+      action: async (reason) => {
         try {
-          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/reject-profile`, { method: 'POST' });
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/reject-profile`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason }) 
+          });
           if (res.ok) {
             toast.success("Profile updates rejected and discarded");
             fetchEmployees();
@@ -457,7 +504,10 @@ export default function AdminEmployees() {
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <h3 className={`font-semibold text-gray-900 truncate ${emp.isActive === false ? 'line-through text-gray-500' : ''}`}>{emp.name}</h3>
+                        <h3 className={`font-semibold text-gray-900 truncate ${emp.isActive === false ? 'line-through text-gray-500' : ''}`}>
+                          {emp.name}
+                          {emp.employeeId && <span className="ml-2 text-xs font-normal text-gray-500">({emp.employeeId})</span>}
+                        </h3>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -708,7 +758,10 @@ export default function AdminEmployees() {
                       className="w-24 h-24 rounded-full border-4 border-white shadow-md bg-gray-50 shrink-0"
                     />
                     <div className="flex-1">
-                      <h3 className="text-2xl font-bold text-gray-900">{selectedDetails.employee.name}</h3>
+                      <h3 className="text-2xl font-bold text-gray-900">
+                        {selectedDetails.employee.name}
+                        {selectedDetails.employee.employeeId && <span className="ml-3 text-lg font-medium text-gray-500">({selectedDetails.employee.employeeId})</span>}
+                      </h3>
                       <p className="text-lg text-gray-600 font-medium">{selectedDetails.employee.designation}</p>
                       <div className="flex items-center space-x-4 mt-2 flex-wrap gap-y-2">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
@@ -717,6 +770,29 @@ export default function AdminEmployees() {
                         </span>
                         <span className="text-sm text-gray-500">{selectedDetails.employee.email}</span>
                       </div>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-2">
+                      {selectedDetails.employee.documents?.offerLetter && (
+                        <button 
+                          onClick={(e) => { e.preventDefault(); setViewerData({ isOpen: true, url: selectedDetails.employee.documents.offerLetter }); }}
+                          className="inline-flex items-center justify-center px-4 py-2 bg-white text-primary border border-primary hover:bg-primary/5 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                        >
+                          View Offer Letter
+                        </button>
+                      )}
+                      <input 
+                        type="file" 
+                        id="offer-letter-upload" 
+                        className="hidden" 
+                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                        onChange={(e) => handleOfferLetterUpload(e, selectedDetails.employee._id)}
+                      />
+                      <label 
+                        htmlFor="offer-letter-upload" 
+                        className="cursor-pointer inline-flex items-center justify-center px-4 py-2 bg-primary text-white hover:bg-primary/90 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> {selectedDetails.employee.documents?.offerLetter ? 'Update' : 'Upload'} Offer Letter
+                      </label>
                     </div>
                   </div>
 
@@ -836,12 +912,14 @@ export default function AdminEmployees() {
                   )}
 
                   {/* Uploaded Documents */}
-                  {selectedDetails.employee.documents && Object.keys(selectedDetails.employee.documents).length > 0 && (
-                    <div className="space-y-4">
-                      <h4 className="text-lg font-semibold flex items-center text-gray-800 mt-6 border-t pt-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between mt-6 border-t pt-6">
+                      <h4 className="text-lg font-semibold flex items-center text-gray-800">
                         <ClipboardList className="w-5 h-5 mr-2 text-primary" />
                         Uploaded Documents
                       </h4>
+                    </div>
+                    {selectedDetails.employee.documents && Object.keys(selectedDetails.employee.documents).length > 0 ? (
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {Object.entries(selectedDetails.employee.documents).map(([key, value]) => {
                           if (!value) return null;
@@ -861,8 +939,12 @@ export default function AdminEmployees() {
                           )
                         })}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="p-6 text-center border border-dashed border-gray-200 rounded-xl bg-gray-50/50 text-gray-500 text-sm">
+                        No documents found.
+                      </div>
+                    )}
+                  </div>
 
                   {/* Professional References */}
                   {selectedDetails.employee.professionalReferences && selectedDetails.employee.professionalReferences.length > 0 && (
