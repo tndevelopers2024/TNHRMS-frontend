@@ -211,7 +211,10 @@ export default function Profile() {
         </div>
         {!isEditing ? (
           <Button 
-            onClick={() => setIsEditing(true)} 
+            onClick={() => {
+              setIsEditing(true);
+              setActiveTab('personal');
+            }} 
             className="bg-primary hover:bg-primary/90 text-white shadow-sm"
             disabled={!!profileData.pendingProfileUpdates}
           >
@@ -225,10 +228,6 @@ export default function Profile() {
               fetchProfile(); // Reset form
               setFilesData({});
             }}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving || !hasChanges} className={`text-white shadow-sm ${hasChanges ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400 cursor-not-allowed'}`}>
-              <Save className="w-4 h-4 mr-2" />
-              {isSaving ? "Saving..." : "Save Changes"}
-            </Button>
           </div>
         )}
       </div>
@@ -576,6 +575,51 @@ export default function Profile() {
                 </div>
               )}
               
+              
+              {/* Step Navigation */}
+              {isEditing && (
+                <div className="flex justify-between items-center mt-10 pt-6 border-t border-gray-100">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const currentIndex = tabs.findIndex(t => t.id === activeTab);
+                      if (currentIndex > 0) {
+                        setActiveTab(tabs[currentIndex - 1].id);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }}
+                    disabled={tabs.findIndex(t => t.id === activeTab) === 0}
+                  >
+                    Previous Step
+                  </Button>
+
+                  {tabs.findIndex(t => t.id === activeTab) === tabs.length - 1 ? (
+                    <Button 
+                      onClick={handleSave} 
+                      disabled={isSaving || !hasChanges} 
+                      className={`text-white shadow-sm ${hasChanges ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400 cursor-not-allowed'}`}
+                    >
+                      <Save className="w-4 h-4 mr-2" />
+                      {isSaving ? "Saving..." : "Save Changes"}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const currentIndex = tabs.findIndex(t => t.id === activeTab);
+                        if (currentIndex < tabs.length - 1) {
+                          setActiveTab(tabs[currentIndex + 1].id);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      }}
+                      className="bg-primary hover:bg-primary/90 text-white"
+                    >
+                      Next Step
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
