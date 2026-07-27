@@ -19,6 +19,7 @@ export default function Profile() {
   const [filesData, setFilesData] = useState({}); // For storing File objects
   const [isSaving, setIsSaving] = useState(false);
   const [viewerData, setViewerData] = useState({ isOpen: false, url: '' });
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
 
@@ -596,30 +597,34 @@ export default function Profile() {
                     Previous Step
                   </Button>
 
-                  {tabs.findIndex(t => t.id === activeTab) === tabs.length - 1 ? (
-                    <Button 
-                      onClick={handleSave} 
-                      disabled={isSaving || !hasChanges} 
-                      className={`text-white shadow-sm ${hasChanges ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400 cursor-not-allowed'}`}
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      {isSaving ? "Saving..." : "Save Changes"}
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      onClick={() => {
-                        const currentIndex = tabs.findIndex(t => t.id === activeTab);
-                        if (currentIndex < tabs.length - 1) {
-                          setActiveTab(tabs[currentIndex + 1].id);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }
-                      }}
-                      className="bg-primary hover:bg-primary/90 text-white"
-                    >
-                      Next Step
-                    </Button>
-                  )}
+                  <div className="flex gap-3">
+                    {tabs.findIndex(t => t.id === activeTab) === tabs.length - 1 ? (
+                      <Button 
+                        type="button"
+                        onClick={() => setShowSaveConfirm(true)} 
+                        disabled={isSaving || !hasChanges} 
+                        className={`text-white shadow-sm ${hasChanges ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-gray-400 cursor-not-allowed'}`}
+                      >
+                        <Save className="w-4 h-4 mr-2" />
+                        {isSaving ? "Saving..." : "Save All"}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const currentIndex = tabs.findIndex(t => t.id === activeTab);
+                          if (currentIndex < tabs.length - 1) {
+                            setActiveTab(tabs[currentIndex + 1].id);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }
+                        }}
+                        className="bg-primary hover:bg-primary/90 text-white"
+                      >
+                        <Save className="w-4 h-4 mr-2" />
+                        Save & Next
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -631,6 +636,37 @@ export default function Profile() {
         fileUrl={viewerData.url} 
         onClose={() => setViewerData({ isOpen: false, url: '' })} 
       />
+
+      {/* Confirmation Modal */}
+      {showSaveConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Save</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to save all changes? Your profile updates will be submitted for admin review.
+              <br /><br />
+              <span className="font-medium text-amber-600">
+                Note: You won't be able to edit your profile again until the admin approves or rejects your submission.
+              </span>
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowSaveConfirm(false)}>
+                Cancel
+              </Button>
+              <Button 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => {
+                  setShowSaveConfirm(false);
+                  handleSave();
+                }}
+                disabled={isSaving}
+              >
+                {isSaving ? "Saving..." : "Yes, Save All"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
