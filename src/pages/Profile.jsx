@@ -29,31 +29,33 @@ export default function Profile() {
         .then(res => res.json())
         .then(data => {
           setProfileData(data);
-          // Initialize form data
+          // If there are pending updates, show those in the form so the user sees what they submitted
+          const displayData = data.pendingProfileUpdates ? { ...data, ...data.pendingProfileUpdates } : data;
+
           const initial = {
-            name: data.name || '',
-            email: data.email || '',
-            phone: data.phone || '',
-            address: data.address || '',
-            dob: data.dob ? data.dob.substring(0, 10) : '',
-            gender: data.gender || '',
-            maritalStatus: data.maritalStatus || '',
-            bloodGroup: data.bloodGroup || '',
+            name: displayData.name || '',
+            email: displayData.email || '',
+            phone: displayData.phone || '',
+            address: displayData.address || '',
+            dob: displayData.dob ? displayData.dob.substring(0, 10) : '',
+            gender: displayData.gender || '',
+            maritalStatus: displayData.maritalStatus || '',
+            bloodGroup: displayData.bloodGroup || '',
             
             // Banking
-            accountHolderName: data.bankingDetails?.accountHolderName || '',
-            accountNumber: data.bankingDetails?.accountNumber || '',
-            bankName: data.bankingDetails?.bankName || '',
-            ifscCode: data.bankingDetails?.ifscCode || '',
-            uan: data.bankingDetails?.uan || '',
+            accountHolderName: displayData.bankingDetails?.accountHolderName || '',
+            accountNumber: displayData.bankingDetails?.accountNumber || '',
+            bankName: displayData.bankingDetails?.bankName || '',
+            ifscCode: displayData.bankingDetails?.ifscCode || '',
+            uan: displayData.bankingDetails?.uan || '',
             
             // Emergency
-            emergencyContactName: data.emergencyContact?.name || '',
-            emergencyContactRelationship: data.emergencyContact?.relationship || '',
-            emergencyContactPhone: data.emergencyContact?.phone || '',
+            emergencyContactName: displayData.emergencyContact?.name || '',
+            emergencyContactRelationship: displayData.emergencyContact?.relationship || '',
+            emergencyContactPhone: displayData.emergencyContact?.phone || '',
             
             // Professional References
-            professionalReferences: data.professionalReferences || []
+            professionalReferences: displayData.professionalReferences || []
           };
           setFormData(initial);
           setInitialFormData(initial);
