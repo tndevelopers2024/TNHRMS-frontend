@@ -128,7 +128,7 @@ export default function Profile() {
       });
 
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/profile-details/${userInfo._id}`, {
-        method: 'PUT',
+        method: 'POST',
         body: data // Don't set Content-Type header, browser does it automatically for FormData
       });
 
@@ -150,7 +150,9 @@ export default function Profile() {
   };
 
   const renderFileUploader = (fieldName, label, description) => {
-    const existingFile = profileData?.documents?.[fieldName];
+    const pendingFile = profileData?.pendingProfileUpdates?.documents?.[fieldName];
+    const approvedFile = profileData?.documents?.[fieldName];
+    const existingFile = pendingFile || approvedFile;
     return (
       <div className="space-y-2 border p-4 rounded-lg bg-gray-50/50">
         <Label className="text-base font-semibold text-gray-900">{label}</Label>

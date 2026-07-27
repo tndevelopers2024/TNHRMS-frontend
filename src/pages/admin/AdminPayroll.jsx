@@ -12,6 +12,7 @@ export default function AdminPayroll() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("All");
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState("All");
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -85,7 +86,8 @@ export default function AdminPayroll() {
     const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (emp.email && emp.email.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesDept = departmentFilter === "All" || (emp.department || 'General') === departmentFilter;
-    return matchesSearch && matchesDept;
+    const matchesEmpType = employmentTypeFilter === "All" || (emp.employmentType || 'fulltime') === employmentTypeFilter;
+    return matchesSearch && matchesDept && matchesEmpType;
   });
 
   const handleDownloadCSV = () => {
@@ -150,15 +152,26 @@ export default function AdminPayroll() {
                 className="pl-9 bg-gray-50/50 border-gray-200 w-full"
               />
             </div>
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="h-10 rounded-md border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-full sm:w-48"
-            >
-              {departments.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
+              <select
+                value={employmentTypeFilter}
+                onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+                className="h-10 rounded-md border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 w-full sm:w-40"
+              >
+                <option value="All">All Types</option>
+                <option value="fulltime">Full-Time</option>
+                <option value="freelancer">Freelancer</option>
+                <option value="intern">Intern</option>
+                <option value="contractor">Contractor</option>
+              </select>
+              <select
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
+                className="h-10 rounded-md border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 w-full sm:w-48"
+              >
+                {departments.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
           </div>
         </CardHeader>
         <div className="overflow-x-auto">

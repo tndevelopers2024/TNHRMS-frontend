@@ -15,6 +15,7 @@ export default function AdminAttendance() {
   // Filters for Today's Status
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
 
   // Employee Reports States
   const [employees, setEmployees] = useState([]);
@@ -126,7 +127,8 @@ export default function AdminAttendance() {
     const matchesSearch = record.employee.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           record.employee.email.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesDept = departmentFilter ? record.employee.department === departmentFilter : true;
-    return matchesSearch && matchesDept;
+    const matchesEmpType = employmentTypeFilter ? record.employee.employmentType === employmentTypeFilter : true;
+    return matchesSearch && matchesDept && matchesEmpType;
   });
 
   const exportTodayCSV = () => {
@@ -294,6 +296,17 @@ export default function AdminAttendance() {
                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 pl-9"
                   />
                 </div>
+                <select
+                  value={employmentTypeFilter}
+                  onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+                  className="flex h-9 w-full sm:w-40 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                >
+                  <option value="">All Types</option>
+                  <option value="fulltime">Full-Time</option>
+                  <option value="freelancer">Freelancer</option>
+                  <option value="intern">Intern</option>
+                  <option value="contractor">Contractor</option>
+                </select>
                 <select
                   value={departmentFilter}
                   onChange={(e) => setDepartmentFilter(e.target.value)}

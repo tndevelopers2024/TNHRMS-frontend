@@ -30,12 +30,13 @@ export default function AdminEmployees() {
   const [viewerData, setViewerData] = useState({ isOpen: false, url: '' });
 
   const [formData, setFormData] = useState({
-    name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '',
+    name: '', email: '', secondaryEmail: '', employmentType: 'fulltime', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '',
     emergencyContact: { name: '', relationship: '', phone: '' }
   });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
 
   useEffect(() => {
     fetchEmployees();
@@ -251,7 +252,7 @@ export default function AdminEmployees() {
       if (res.ok) {
         setShowAddForm(false);
         setEditingEmployeeId(null);
-        setFormData({ name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '', emergencyContact: { name: '', relationship: '', phone: '' } });
+        setFormData({ name: '', email: '', secondaryEmail: '', employmentType: 'fulltime', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '', emergencyContact: { name: '', relationship: '', phone: '' } });
         fetchEmployees();
         toast.success(isEditing ? "Employee updated successfully" : "Employee added successfully");
         if (isEditing && selectedDetails) {
@@ -324,7 +325,8 @@ export default function AdminEmployees() {
                           emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (emp.designation && emp.designation.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesDept = departmentFilter ? emp.department === departmentFilter : true;
-    return matchesSearch && matchesDept;
+    const matchesEmpType = employmentTypeFilter ? emp.employmentType === employmentTypeFilter : true;
+    return matchesSearch && matchesDept && matchesEmpType;
   });
 
   // Group employees by department
@@ -345,7 +347,7 @@ export default function AdminEmployees() {
         </div>
         <Button onClick={() => {
           setEditingEmployeeId(null);
-          setFormData({ name: '', email: '', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '', emergencyContact: { name: '', relationship: '', phone: '' } });
+          setFormData({ name: '', email: '', secondaryEmail: '', employmentType: 'fulltime', department: '', designation: '', phone: '', address: '', gender: '', dob: '', joiningDate: '', salary: '', emergencyContact: { name: '', relationship: '', phone: '' } });
           setShowAddForm(!showAddForm);
         }} className="bg-primary hover:bg-primary/90 text-white shadow-sm">
           <Plus className="w-4 h-4 mr-2" />
@@ -362,6 +364,19 @@ export default function AdminEmployees() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        <div className="w-full sm:w-48">
+          <select 
+            className="flex h-10 w-full rounded-md border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+            value={employmentTypeFilter}
+            onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+          >
+            <option value="">All Types</option>
+            <option value="fulltime">Full-Time</option>
+            <option value="freelancer">Freelancer</option>
+            <option value="intern">Intern</option>
+            <option value="contractor">Contractor</option>
+          </select>
         </div>
         <div className="w-full sm:w-64">
           <select 
@@ -398,8 +413,21 @@ export default function AdminEmployees() {
                     <Label>Email Address</Label>
                     <Input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email" />
                   </div>
+                  <div className="space-y-2">
+                    <Label>Secondary Email</Label>
+                    <Input type="email" value={formData.secondaryEmail} onChange={e => setFormData({...formData, secondaryEmail: e.target.value})} placeholder="Secondary Email" />
+                  </div>
                   
                   {/* Work Details */}
+                  <div className="space-y-2">
+                    <Label>Employment Type</Label>
+                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={formData.employmentType} onChange={e => setFormData({...formData, employmentType: e.target.value})}>
+                      <option value="fulltime">Full-Time</option>
+                      <option value="freelancer">Freelancer</option>
+                      <option value="intern">Intern</option>
+                      <option value="contractor">Contractor</option>
+                    </select>
+                  </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Department</Label>
@@ -799,6 +827,8 @@ export default function AdminEmployees() {
                   {/* Comprehensive Details */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-xl text-sm border border-gray-100">
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Phone</p><p className="font-medium text-gray-900">{selectedDetails.employee.phone || 'N/A'}</p></div>
+                    <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Secondary Email</p><p className="font-medium text-gray-900">{selectedDetails.employee.secondaryEmail || 'N/A'}</p></div>
+                    <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Emp. Type</p><p className="font-medium text-gray-900 capitalize">{selectedDetails.employee.employmentType || 'fulltime'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Joining Date</p><p className="font-medium text-gray-900">{selectedDetails.employee.joiningDate ? new Date(selectedDetails.employee.joiningDate).toLocaleDateString('en-GB') : 'N/A'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Salary</p><p className="font-medium text-emerald-600">₹{selectedDetails.employee.salary ? selectedDetails.employee.salary.toLocaleString() : 'N/A'}</p></div>
                     <div><p className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-semibold">Gender</p><p className="font-medium text-gray-900">{selectedDetails.employee.gender || 'N/A'}</p></div>
@@ -1108,6 +1138,8 @@ export default function AdminEmployees() {
                     setFormData({
                       name: emp.name || '',
                       email: emp.email || '',
+                      secondaryEmail: emp.secondaryEmail || '',
+                      employmentType: emp.employmentType || 'fulltime',
                       department: emp.department || '',
                       designation: emp.designation || '',
                       phone: emp.phone || '',

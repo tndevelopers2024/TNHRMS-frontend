@@ -80,7 +80,10 @@ export default function Leaves() {
     let days = 0;
     let current = new Date(s);
     while (current <= e) {
-      if (current.getDay() !== 0) { // 0 is Sunday
+      const isSunday = current.getDay() === 0;
+      const isSecondSaturday = current.getDay() === 6 && current.getDate() >= 8 && current.getDate() <= 14;
+      
+      if (!isSunday && !isSecondSaturday) {
         days++;
       }
       current.setDate(current.getDate() + 1);

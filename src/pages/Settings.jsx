@@ -82,7 +82,7 @@ export default function Settings() {
 
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/update-profile/${userInfo._id}`, {
-          method: 'PUT',
+          method: 'POST',
           body: formData
         });
         const data = await res.json();

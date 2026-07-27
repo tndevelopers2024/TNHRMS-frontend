@@ -14,6 +14,7 @@ export default function AdminWork() {
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState(["All"]);
   const [departmentFilter, setDepartmentFilter] = useState("All");
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   
   // Modal states
@@ -193,9 +194,10 @@ export default function AdminWork() {
       const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             emp.email.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesDept = departmentFilter === "All" || emp.department === departmentFilter;
-      return matchesSearch && matchesDept;
+      const matchesEmpType = employmentTypeFilter === "All" || emp.employmentType === employmentTypeFilter;
+      return matchesSearch && matchesDept && matchesEmpType;
     });
-  }, [employees, searchQuery, departmentFilter]);
+  }, [employees, searchQuery, departmentFilter, employmentTypeFilter]);
 
   return (
     <div className="space-y-6">
@@ -210,6 +212,17 @@ export default function AdminWork() {
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between pb-4 border-b border-gray-50 gap-4">
           <CardTitle>Employees List</CardTitle>
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <select
+              value={employmentTypeFilter}
+              onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary w-full sm:w-40"
+            >
+              <option value="All">All Types</option>
+              <option value="fulltime">Full-Time</option>
+              <option value="freelancer">Freelancer</option>
+              <option value="intern">Intern</option>
+              <option value="contractor">Contractor</option>
+            </select>
             <select 
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
