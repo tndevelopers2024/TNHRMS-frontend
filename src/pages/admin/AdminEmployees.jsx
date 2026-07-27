@@ -188,20 +188,27 @@ export default function AdminEmployees() {
   };
 
   const handleApproveProfile = async (empId) => {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/approve-profile`, { method: 'POST' });
-      if (res.ok) {
-        toast.success("Profile updates approved successfully");
-        fetchEmployees();
-        handleCardClick(empId); // refresh modal
-      } else {
-        const err = await res.json();
-        toast.error(err.message || 'Failed to approve updates');
+    confirm({
+      title: "Approve Updates",
+      message: "Are you sure you want to approve these profile updates? This will overwrite the employee's current live data.",
+      confirmText: "Approve",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees/${empId}/approve-profile`, { method: 'POST' });
+          if (res.ok) {
+            toast.success("Profile updates approved successfully");
+            fetchEmployees();
+            handleCardClick(empId); // refresh modal
+          } else {
+            const err = await res.json();
+            toast.error(err.message || 'Failed to approve updates');
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error('An error occurred');
+        }
       }
-    } catch (err) {
-      console.error(err);
-      toast.error('An error occurred');
-    }
+    });
   };
 
   const handleRejectProfile = async (empId) => {
