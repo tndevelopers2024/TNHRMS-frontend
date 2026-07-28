@@ -771,7 +771,7 @@ export default function AdminEmployees() {
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                           </svg>
                                         </div>
-                                        <span className="text-xs font-medium text-gray-700 capitalize truncate w-full ml-2 text-left">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                        <span className="text-xs font-medium text-gray-700 capitalize truncate w-full ml-2 text-left">{key === 'passport' ? 'Passport / Driving Licence' : key.replace(/([A-Z])/g, ' $1').trim()}</span>
                                       </button>
                                     )
                                   })}
@@ -971,7 +971,7 @@ export default function AdminEmployees() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                 </svg>
                               </div>
-                              <span className="text-sm font-medium text-gray-700 capitalize truncate w-full text-left">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                              <span className="text-sm font-medium text-gray-700 capitalize truncate w-full text-left">{key === 'passport' ? 'Passport / Driving Licence' : key.replace(/([A-Z])/g, ' $1').trim()}</span>
                             </button>
                           )
                         })}
