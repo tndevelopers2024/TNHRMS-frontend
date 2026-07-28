@@ -563,6 +563,15 @@ export default function AdminEmployees() {
                         </div>
                       )}
                     </div>
+                    {emp.documentStatus === 'Approved' ? (
+                      <div className="absolute bottom-2 right-2 flex items-center bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-200" title="Background Verification Approved">
+                        <Check className="w-3 h-3 mr-1" /> BGV
+                      </div>
+                    ) : (
+                      <div className="absolute bottom-2 right-2 flex items-center bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md text-[10px] font-bold border border-rose-100" title="Background Verification Pending or Not Verified">
+                        <X className="w-3 h-3 mr-1" /> Not Verified
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
