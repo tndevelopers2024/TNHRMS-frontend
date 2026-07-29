@@ -3,7 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Image as ImageIcon, Camera, Trash2, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Lock, Image as ImageIcon, Camera, Trash2, Eye, EyeOff, Loader2, X } from "lucide-react";
+import Cropper from 'react-easy-crop';
+import getCroppedImg from '@/utils/cropImage';
 
 export default function Settings() {
   const [userInfo, setUserInfo] = useState(JSON.parse(localStorage.getItem('userInfo') || '{}'));
@@ -21,6 +23,12 @@ export default function Settings() {
   const [profileImage, setProfileImage] = useState(userInfo.profileImage || '');
   const [uploadMessage, setUploadMessage] = useState('');
 
+  // Image Crop State
+  const [imageToCrop, setImageToCrop] = useState(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
@@ -71,37 +79,60 @@ export default function Settings() {
     }
   };
 
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const objectUrl = URL.createObjectURL(file);
+      setImageToCrop(objectUrl);
+      setIsCropperOpen(true);
+    }
+    e.target.value = '';
+  };
+
+  const onCropComplete = (croppedArea, croppedAreaPixels) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  const handleCropSave = async () => {
+    try {
+      const croppedImageBlob = await getCroppedImg(
+        imageToCrop,
+        croppedAreaPixels,
+        0
+      );
+      
+      const objectUrl = URL.createObjectURL(croppedImageBlob);
       setProfileImage(objectUrl);
+      setIsCropperOpen(false);
+      setImageToCrop(null);
       
       const formData = new FormData();
-      formData.append('profileImage', file);
+      formData.append('profileImage', croppedImageBlob, 'profile.jpg');
 
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/update-profile/${userInfo._id}`, {
-          method: 'POST',
-          body: formData
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setUploadMessage('Profile image updated!');
-          // Update local storage so other components can see it
-          const updatedUser = { ...userInfo, profileImage: data.profileImage };
-          localStorage.setItem('userInfo', JSON.stringify(updatedUser));
-          setUserInfo(updatedUser);
-          setProfileImage(data.profileImage);
-          // Dispatch a custom event to notify other components (like sidebar)
-          window.dispatchEvent(new Event('profileImageUpdated'));
-        } else {
-          setUploadMessage('Failed to save image.');
-        }
-      } catch (err) {
-        setUploadMessage('Network error occurred');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/update-profile/${userInfo._id}`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUploadMessage('Profile image updated!');
+        const updatedUser = { ...userInfo, profileImage: data.profileImage };
+        localStorage.setItem('userInfo', JSON.stringify(updatedUser));
+        setUserInfo(updatedUser);
+        setProfileImage(data.profileImage);
+        window.dispatchEvent(new Event('profileImageUpdated'));
+      } else {
+        setUploadMessage('Failed to save image.');
       }
+    } catch (e) {
+      console.error(e);
+      setUploadMessage('Error cropping or uploading image.');
     }
+  };
+
+  const handleCropCancel = () => {
+    setIsCropperOpen(false);
+    setImageToCrop(null);
   };
 
   const getImageUrl = (url) => {
@@ -244,6 +275,51 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
+
+      {isCropperOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="p-4 border-b flex justify-between items-center dark:border-slate-800">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Crop Profile Picture</h3>
+              <button onClick={handleCropCancel} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="relative w-full h-[300px] bg-black">
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+              />
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-slate-500 dark:text-slate-400">Zoom</span>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  aria-labelledby="Zoom"
+                  onChange={(e) => setZoom(e.target.value)}
+                  className="w-full accent-primary"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={handleCropCancel}>Cancel</Button>
+                <Button onClick={handleCropSave}>Save Image</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
