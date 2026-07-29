@@ -23,6 +23,12 @@ export default function Profile() {
 
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
 
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('/')) return `${import.meta.env.VITE_API_URL}${url}`;
+    return url;
+  };
+
   const fetchProfile = () => {
     if (userInfo._id) {
       fetch(`${import.meta.env.VITE_API_URL}/api/employee/profile/${userInfo._id}`)
@@ -299,7 +305,7 @@ export default function Profile() {
             <div className="flex flex-col items-center -mt-12 text-center">
               <div className="w-24 h-24 bg-white rounded-full p-1 shadow-md">
                 <img 
-                  src={profileData.profileImage || `https://api.dicebear.com/7.x/notionists/svg?seed=${profileData.name.replace(' ', '')}&backgroundColor=f3f4f6`} 
+                  src={getImageUrl(profileData.profileImage) || `https://api.dicebear.com/7.x/notionists/svg?seed=${profileData.name.replace(' ', '')}&backgroundColor=f3f4f6`} 
                   alt="Profile" 
                   className="w-full h-full rounded-full bg-gray-100 object-cover"
                 />

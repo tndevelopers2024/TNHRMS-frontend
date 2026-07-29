@@ -52,7 +52,7 @@ export default function Settings() {
   const handleRemoveImage = async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/update-profile/${userInfo._id}`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profileImage: '' })
       });

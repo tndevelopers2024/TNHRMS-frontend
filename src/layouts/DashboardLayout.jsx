@@ -61,6 +61,12 @@ function DashboardLayoutContent() {
   const navigate = useNavigate();
   const socket = useSocket();
 
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('/')) return `${import.meta.env.VITE_API_URL}${url}`;
+    return url;
+  };
+
   const userInfoString = localStorage.getItem('userInfo');
   
   if (!userInfoString) {
@@ -137,7 +143,7 @@ function DashboardLayoutContent() {
     // Listen to profile image updates
     const handleProfileUpdate = () => {
       const updatedUser = JSON.parse(localStorage.getItem('userInfo') || '{}');
-      if (updatedUser.profileImage) {
+      if (updatedUser.profileImage !== undefined) {
         setProfileImage(updatedUser.profileImage);
       }
     };
@@ -465,7 +471,7 @@ function DashboardLayoutContent() {
                 )}
               </div>
               <img 
-                src={profileImage || `https://api.dicebear.com/7.x/notionists/svg?seed=${userName.replace(' ', '')}&backgroundColor=f3f4f6`}
+                src={getImageUrl(profileImage) || `https://api.dicebear.com/7.x/notionists/svg?seed=${userName.replace(' ', '')}&backgroundColor=f3f4f6`}
                 alt="Profile" 
                 className="w-10 h-10 rounded-full border border-gray-200 bg-gray-100 object-cover"
               />

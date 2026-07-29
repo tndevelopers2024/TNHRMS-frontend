@@ -27,6 +27,12 @@ export default function AdminAttendance() {
 
   const socket = useSocket();
 
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('/')) return `${import.meta.env.VITE_API_URL}${url}`;
+    return url;
+  };
+
   useEffect(() => {
     fetchTodayAttendance();
     fetchEmployees();
@@ -368,7 +374,7 @@ export default function AdminAttendance() {
                             <td className="px-6 py-4">
                               <div className="flex items-center space-x-3">
                                 <img 
-                                  src={emp.profileImage || `https://api.dicebear.com/7.x/notionists/svg?seed=${emp.name.replace(' ', '')}&backgroundColor=f3f4f6`}
+                                  src={getImageUrl(emp.profileImage) || `https://api.dicebear.com/7.x/notionists/svg?seed=${emp.name.replace(' ', '')}&backgroundColor=f3f4f6`}
                                   alt={emp.name} 
                                   className="w-8 h-8 rounded-full border bg-gray-50"
                                 />
