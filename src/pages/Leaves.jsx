@@ -167,45 +167,81 @@ export default function Leaves() {
 
     const maxDays = balanceConfig[formData.type];
     const currentlyUsed = calcUsed(formData.type);
-    
-    if (days > (maxDays - currentlyUsed)) {
-      toast.error(`You only have ${maxDays - currentlyUsed} day(s) of ${formData.type} remaining.`);
-      setSubmitting(false);
-      return;
-    }
+    const remainingBalance = Math.max(0, (maxDays || 0) - currentlyUsed);
 
-    try {
-      const data = new FormData();
-      data.append('employee', user._id);
-      data.append('type', formData.type);
-      data.append('startDate', formData.startDate);
-      data.append('endDate', formData.endDate);
-      data.append('days', days);
-      data.append('reason', formData.reason);
-      if (formData.attachment) {
-        data.append('attachment', formData.attachment);
+    const submitLeaveForm = async (calculatedDays) => {
+      try {
+        const data = new FormData();
+        data.append('employee', user._id);
+        data.append('type', formData.type);
+        data.append('startDate', formData.startDate);
+        data.append('endDate', formData.endDate);
+        data.append('days', calculatedDays);
+        data.append('reason', formData.reason);
+        if (formData.attachment) {
+          data.append('attachment', formData.attachment);
+        }
+
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves`, {
+          method: 'POST',
+          body: data
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          if (Array.isArray(result)) {
+            setLeaves([...result, ...leaves]);
+          } else {
+            setLeaves([result, ...leaves]);
+          }
+          setShowForm(false);
+          setFormData({ type: "Casual Leave", startDate: "", endDate: "", reason: "", attachment: "", isHalfDay: false });
+          toast.success("Leave applied successfully");
+        } else {
+          const errorData = await res.json();
+          toast.error(errorData.message || "Failed to apply for leave");
+        }
+      } catch (err) {
+        console.error("Error applying leave:", err);
+        toast.error("Failed to connect to server");
+      } finally {
+        setSubmitting(false);
       }
+    };
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves`, {
-        method: 'POST',
-        body: data
-      });
+    if (formData.type !== "Loss of Pay" && days > remainingBalance) {
+      const extraDays = days - remainingBalance;
+      const earnedLeaveItem = leaveBalances.find(l => l.type === "Earned Leave");
+      const earnedLeaveRemaining = earnedLeaveItem ? Math.max(0, earnedLeaveItem.total - earnedLeaveItem.used) : 0;
 
-      if (res.ok) {
-        const newLeave = await res.json();
-        setLeaves([newLeave, ...leaves]);
-        setShowForm(false);
-        setFormData({ type: "Casual Leave", startDate: "", endDate: "", reason: "", attachment: "", isHalfDay: false });
-        toast.success("Leave applied successfully");
+      let message = "";
+      if (formData.type !== "Earned Leave" && earnedLeaveRemaining > 0) {
+        const toEarnedLeave = Math.min(extraDays, earnedLeaveRemaining);
+        const toLossOfPay = Math.max(0, extraDays - earnedLeaveRemaining);
+        
+        message = `You only have ${remainingBalance} day(s) of ${formData.type} remaining. The extra ${extraDays} day(s) will be taken from your Earned Leave (${toEarnedLeave} day(s))`;
+        if (toLossOfPay > 0) {
+          message += ` and Loss of Pay (${toLossOfPay} day(s))`;
+        }
+        message += `. Do you want to proceed?`;
       } else {
-        const errorData = await res.json();
-        toast.error(errorData.message || "Failed to apply for leave");
+        message = `You only have ${remainingBalance} day(s) of ${formData.type} remaining. The extra ${extraDays} day(s) will be recorded as Loss of Pay. Do you want to proceed?`;
       }
-    } catch (err) {
-      console.error("Error applying leave:", err);
-      toast.error("Failed to connect to server");
-    } finally {
-      setSubmitting(false);
+
+      confirm({
+        title: "Confirm Leave Conversion",
+        message: message,
+        confirmText: "Proceed",
+        action: async () => {
+          await submitLeaveForm(days);
+        }
+      }).then(res => {
+        if (res === null) {
+          setSubmitting(false);
+        }
+      });
+    } else {
+      await submitLeaveForm(days);
     }
   };
 
@@ -273,6 +309,9 @@ export default function Leaves() {
     { type: "Sick Leave", total: 6, used: calcUsed("Sick Leave"), color: "bg-rose-500" },
     { type: "Earned Leave", total: userProfile?.earnedLeaves || 0, used: calcUsed("Earned Leave"), color: "bg-emerald-500" },
   ];
+
+  const totalRemaining = leaveBalances.reduce((acc, curr) => acc + Math.max(0, curr.total - curr.used), 0);
+  const hasLeavesRemaining = totalRemaining > 0;
 
   let calculatedDays = 0;
   if (formData.startDate && formData.endDate) {
@@ -427,7 +466,7 @@ export default function Leaves() {
                       <option>Casual Leave</option>
                       <option>Sick Leave</option>
                       <option>Earned Leave</option>
-                      <option>Loss of Pay</option>
+                      {!hasLeavesRemaining && <option>Loss of Pay</option>}
                     </select>
                   </div>
                   <div className="space-y-2">
