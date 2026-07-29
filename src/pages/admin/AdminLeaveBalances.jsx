@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { FileText, Edit2, Check, X, Search } from 'lucide-react';
+import { FileText, Edit2, Check, X, Search, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -8,6 +8,8 @@ export default function AdminLeaveBalances() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editBalances, setEditBalances] = useState({ casual: '', sick: '', earned: '' });
 
@@ -100,11 +102,44 @@ export default function AdminLeaveBalances() {
     }
   };
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.department?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEmployees = employees.filter(emp => {
+    const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          emp.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          emp.department?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDept = departmentFilter ? emp.department === departmentFilter : true;
+    const matchesType = typeFilter ? emp.employmentType === typeFilter : true;
+    return matchesSearch && matchesDept && matchesType;
+  });
+
+  const departments = [...new Set(employees.map(e => e.department).filter(Boolean))];
+
+  const handleExport = () => {
+    const headers = ['Employee Name', 'Emp ID', 'Department', 'Employment Type', 'Casual Leaves Available', 'Sick Leaves Available', 'Earned Leaves Available'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredEmployees.map(emp => [
+        `"${emp.name || ''}"`,
+        `"${emp.employeeId || 'N/A'}"`,
+        `"${emp.department || ''}"`,
+        `"${emp.employmentType || ''}"`,
+        emp.casualLeavesAvailable !== undefined ? emp.casualLeavesAvailable : (emp.casualLeavesTotal || 3),
+        emp.sickLeavesAvailable !== undefined ? emp.sickLeavesAvailable : (emp.sickLeavesTotal || 6),
+        emp.earnedLeavesAvailable !== undefined ? emp.earnedLeavesAvailable : (emp.earnedLeavesTotal || 0)
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'leave_balances.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   if (loading) {
     return (
@@ -124,16 +159,44 @@ export default function AdminLeaveBalances() {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-          <div className="relative max-w-md">
+        <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row gap-4 justify-between items-center">
+          <div className="relative w-full md:max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <Input
               type="text"
               placeholder="Search by name, ID, or department..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border-gray-200 focus:ring-primary/20 rounded-xl"
+              className="pl-10 pr-4 py-2 border-gray-200 focus:ring-primary/20 rounded-xl w-full"
             />
+          </div>
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <select 
+              className="flex h-10 w-full sm:w-32 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value="">All Types</option>
+              <option value="fulltime">Full-Time</option>
+              <option value="freelancer">Freelancer</option>
+              <option value="intern">Intern</option>
+              <option value="contractor">Contractor</option>
+            </select>
+
+            <select 
+              className="flex h-10 w-full sm:w-52 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+            >
+              <option value="">All Departments</option>
+              {departments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+
+            <Button onClick={handleExport} variant="outline" className="rounded-xl border-gray-200 gap-2 shrink-0 h-10">
+              <Download className="w-4 h-4" /> Export
+            </Button>
           </div>
         </div>
 
