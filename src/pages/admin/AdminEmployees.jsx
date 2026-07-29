@@ -578,10 +578,10 @@ export default function AdminEmployees() {
             </div>
           </div>
         ))}
-        {employees.length === 0 && (
+        {filteredEmployees.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <Users className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-            <p>No employees found. Add some users to get started!</p>
+            <p>{employees.length === 0 ? "No employees found. Add some users to get started!" : "No employees match your filters."}</p>
           </div>
         )}
       </div>
