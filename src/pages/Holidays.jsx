@@ -48,16 +48,16 @@ export default function Holidays() {
     : holidays.filter(h => getMonthAbbr(h.date) === filterMonth.toUpperCase());
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto">
+    <div className="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto items-start">
       
       {/* Left Sidebar */}
-      <div className="w-full lg:w-80 space-y-6">
+      <div className="w-full lg:w-80 space-y-6 lg:sticky lg:top-6">
         
         {/* Next Holiday Card */}
         {nextHoliday && (
           <Card className="border border-gray-100 shadow-sm overflow-hidden text-center">
             <CardContent className="p-0">
-              <div className="bg-primary/5 h-32 flex items-center justify-center relative">
+              <div className="bg-primary/5 h-28 flex items-center justify-center relative">
                 <div className="absolute -bottom-10 w-24 h-24 rounded-full border-4 border-white bg-white overflow-hidden shadow-md flex items-center justify-center">
                   <img src="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80" alt="Festive" className="object-cover w-full h-full" />
                 </div>

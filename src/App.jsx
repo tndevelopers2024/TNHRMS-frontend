@@ -17,6 +17,7 @@ import AdminHolidays from './pages/admin/AdminHolidays';
 import AdminEmployees from './pages/admin/AdminEmployees';
 import AdminAttendance from './pages/admin/AdminAttendance';
 import AdminPayroll from './pages/admin/AdminPayroll'; 
+import AdminLeaveBalances from './pages/admin/AdminLeaveBalances';
 import Settings from './pages/Settings';
 import ComingSoon from './pages/ComingSoon';
 import DailyWorkLog from './pages/DailyWorkLog';
@@ -102,6 +103,7 @@ function App() {
             <Route path="admin/employees" element={<AdminEmployees />} />
             <Route path="admin/attendance" element={<AdminAttendance />} />
             <Route path="admin/payroll" element={<AdminPayroll />} />
+            <Route path="admin/leave-balances" element={<AdminLeaveBalances />} />
             
             {/* Catch-all for authenticated users */}
             <Route path="*" element={<ComingSoon />} />

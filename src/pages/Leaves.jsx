@@ -160,8 +160,8 @@ export default function Leaves() {
     }
 
     const balanceConfig = {
-      "Casual Leave": 3,
-      "Sick Leave": 6,
+      "Casual Leave": userProfile?.casualLeaves !== undefined ? userProfile.casualLeaves : 3,
+      "Sick Leave": userProfile?.sickLeaves !== undefined ? userProfile.sickLeaves : 6,
       "Earned Leave": userProfile?.earnedLeaves || 0
     };
 
@@ -210,39 +210,12 @@ export default function Leaves() {
     };
 
     if (formData.type !== "Loss of Pay" && days > remainingBalance) {
-      const extraDays = days - remainingBalance;
-      const earnedLeaveItem = leaveBalances.find(l => l.type === "Earned Leave");
-      const earnedLeaveRemaining = earnedLeaveItem ? Math.max(0, earnedLeaveItem.total - earnedLeaveItem.used) : 0;
-
-      let message = "";
-      if (formData.type !== "Earned Leave" && earnedLeaveRemaining > 0) {
-        const toEarnedLeave = Math.min(extraDays, earnedLeaveRemaining);
-        const toLossOfPay = Math.max(0, extraDays - earnedLeaveRemaining);
-        
-        message = `You only have ${remainingBalance} day(s) of ${formData.type} remaining. The extra ${extraDays} day(s) will be taken from your Earned Leave (${toEarnedLeave} day(s))`;
-        if (toLossOfPay > 0) {
-          message += ` and Loss of Pay (${toLossOfPay} day(s))`;
-        }
-        message += `. Do you want to proceed?`;
-      } else {
-        message = `You only have ${remainingBalance} day(s) of ${formData.type} remaining. The extra ${extraDays} day(s) will be recorded as Loss of Pay. Do you want to proceed?`;
-      }
-
-      confirm({
-        title: "Confirm Leave Conversion",
-        message: message,
-        confirmText: "Proceed",
-        action: async () => {
-          await submitLeaveForm(days);
-        }
-      }).then(res => {
-        if (res === null) {
-          setSubmitting(false);
-        }
-      });
-    } else {
-      await submitLeaveForm(days);
+      toast.error(`You only have ${remainingBalance} day(s) of ${formData.type} remaining. You cannot apply for ${days} day(s).`);
+      setSubmitting(false);
+      return;
     }
+    
+    await submitLeaveForm(days);
   };
 
   const handleFileChange = (e) => {
@@ -305,8 +278,8 @@ export default function Leaves() {
   };
 
   const leaveBalances = [
-    { type: "Casual Leave", total: 3, used: calcUsed("Casual Leave"), color: "bg-primary" },
-    { type: "Sick Leave", total: 6, used: calcUsed("Sick Leave"), color: "bg-rose-500" },
+    { type: "Casual Leave", total: userProfile?.casualLeaves !== undefined ? userProfile.casualLeaves : 3, used: calcUsed("Casual Leave"), color: "bg-primary" },
+    { type: "Sick Leave", total: userProfile?.sickLeaves !== undefined ? userProfile.sickLeaves : 6, used: calcUsed("Sick Leave"), color: "bg-rose-500" },
     { type: "Earned Leave", total: userProfile?.earnedLeaves || 0, used: calcUsed("Earned Leave"), color: "bg-emerald-500" },
   ];
 

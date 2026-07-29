@@ -44,6 +44,7 @@ const adminLinks = [
   { name: 'Attendance Reports', path: '/admin/attendance', icon: Activity },
   { name: 'Work Assignment', path: '/admin/work', icon: ClipboardList },
   { name: 'Leave Approvals', path: '/admin/leaves', icon: CheckSquare },
+  { name: 'Leave Balances', path: '/admin/leave-balances', icon: FileText },
   { name: 'Manage Holidays', path: '/admin/holidays', icon: CalendarDays },
   { name: 'Payroll', path: '/admin/payroll', icon: Wallet },
   { name: 'Profile', path: '/profile', icon: User },

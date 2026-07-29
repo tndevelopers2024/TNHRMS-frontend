@@ -418,7 +418,7 @@ export default function AdminEmployees() {
                   </div>
                   <div className="space-y-2">
                     <Label>Email Address</Label>
-                    <Input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email" />
+                    <Input type="email" required={!formData.secondaryEmail} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="Email" />
                   </div>
                   <div className="space-y-2">
                     <Label>Secondary Email</Label>

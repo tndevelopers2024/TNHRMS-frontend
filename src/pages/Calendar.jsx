@@ -100,6 +100,18 @@ export default function Calendar() {
       });
     }
 
+    // Check Office Holidays (Sundays & Second Saturdays)
+    const isSunday = date.getDay() === 0;
+    const isSecondSaturday = date.getDay() === 6 && date.getDate() >= 8 && date.getDate() <= 14;
+    
+    if (isSunday || isSecondSaturday) {
+      events.push({
+        id: `oh-${date.getTime()}`,
+        name: 'Office Holiday',
+        color: 'bg-red-50 text-red-700 border-red-200'
+      });
+    }
+
 
     return events;
   };
@@ -126,6 +138,11 @@ export default function Calendar() {
             <div className="flex items-center space-x-2">
               <span className="w-3 h-3 rounded-full bg-purple-500"></span>
               <span>Public Holidays</span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="w-3 h-3 rounded-full bg-red-400"></span>
+              <span>Office Holidays</span>
             </div>
 
           </div>
