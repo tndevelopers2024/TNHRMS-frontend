@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Activity, FileText, Search, Clock, Download, CheckCircle } from "lucide-react";
+import { Users, Activity, FileText, Search, Clock, Download, CheckCircle, XCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useSocket } from "../../context/SocketContext";
@@ -127,6 +127,56 @@ export default function AdminAttendance() {
     });
   };
 
+  // Mark a missing day (no check-in at all) as Leave
+  const handleMarkAbsent = async (date) => {
+    confirm({
+      title: "Mark as Leave",
+      message: `Mark ${date} as a Leave day? This will create an attendance record showing the employee was absent.`,
+      confirmText: "Mark as Leave",
+      cancelText: "Cancel",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/attendance/mark-absent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ employeeId: selectedEmployeeId, date }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message);
+          toast.success('Day marked as Leave.');
+          fetchEmployeeAttendance(selectedEmployeeId);
+        } catch (err) {
+          toast.error(err.message || 'Failed to mark as leave.');
+        }
+      }
+    });
+  };
+
+  // Create a record for a missing day and mark it Present
+  const handleCreateAndMarkPresent = async (date) => {
+    confirm({
+      title: "Mark as Present",
+      message: `Mark ${date} as a Present day? This will create an 8-hour attendance record for this employee.`,
+      confirmText: "Mark Present",
+      cancelText: "Cancel",
+      action: async () => {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/attendance/create-and-mark-present`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ employeeId: selectedEmployeeId, date }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message);
+          toast.success('Day marked as Present.');
+          fetchEmployeeAttendance(selectedEmployeeId);
+        } catch (err) {
+          toast.error(err.message || 'Failed to mark as present.');
+        }
+      }
+    });
+  };
+
   const departments = [...new Set(employees.map(e => e.department))].filter(Boolean);
 
   const filteredTodayData = todayData.filter(record => {
@@ -187,6 +237,70 @@ export default function AdminAttendance() {
 
     return yearMatch && monthMatch;
   });
+
+  // Helper: check if a date (JS Date) is a working day (Mon-Sat, excluding 2nd Saturday)
+  const isWorkingDay = (d) => {
+    const day = d.getDay(); // 0=Sun, 6=Sat
+    if (day === 0) return false; // Sunday off
+    if (day === 6) {
+      // 2nd Saturday off
+      const date = d.getDate();
+      if (date >= 8 && date <= 14) return false;
+    }
+    return true;
+  };
+
+  // Build a merged list of actual records + synthetic missing-day placeholders for daily view
+  const mergedDailyRows = useMemo(() => {
+    if (!selectedEmployeeId || filteredHistory.length === 0) return filteredHistory;
+
+    // Build a lookup of existing records by date string
+    const recordsByDate = {};
+    filteredHistory.forEach(r => { recordsByDate[r.date] = r; });
+
+    // Determine range: from the earliest record date to yesterday (not today)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const dates = filteredHistory.map(r => r.date).sort();
+    if (dates.length === 0) return filteredHistory;
+
+    const startDate = new Date(dates[0]);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = yesterday;
+
+    // Walk every calendar day from start to end
+    const rows = [];
+    const cursor = new Date(startDate);
+    while (cursor <= endDate) {
+      const dateStr = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
+
+      if (recordsByDate[dateStr]) {
+        // Real record exists
+        rows.push({ ...recordsByDate[dateStr], isMissing: false });
+      } else if (isWorkingDay(cursor)) {
+        // Missing working day — show as Leave placeholder
+        rows.push({
+          _id: `missing-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Auto-Leave',
+          summary: null,
+          isMissing: true, // flag to render differently
+        });
+      }
+
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    // Sort descending (newest first)
+    rows.sort((a, b) => (a.date > b.date ? -1 : 1));
+    return rows;
+  }, [filteredHistory, selectedEmployeeId]);
 
   const exportReportCSV = () => {
     let headers = [];
@@ -501,47 +615,102 @@ export default function AdminAttendance() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {filteredHistory.length > 0 ? (
-                          filteredHistory.map((record) => (
-                            <tr key={record._id} className="hover:bg-gray-50/30 transition-colors">
-                              <td className="px-6 py-4 font-medium text-gray-900">
-                                {new Date(record.date).toLocaleDateString('en-GB')}
-                              </td>
-                              <td className="px-6 py-4 text-gray-600">
-                                {record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
-                              </td>
-                              <td className="px-6 py-4 text-gray-600">
-                                {record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
-                              </td>
-                              <td className="px-6 py-4 font-medium text-primary">
-                                {record.totalHours ? `${record.totalHours}h` : '-'}
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                                  record.status === 'Auto-Leave' ? 'bg-rose-100 text-rose-700' : 
-                                  record.checkOutTime ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {record.status === 'Auto-Leave' ? 'Leave' : record.checkOutTime ? 'Present' : 'Working'}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
-                                {record.summary || '-'}
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                {(!record.checkOutTime || record.status === 'Auto-Leave') && (
-                                  <Button 
-                                    onClick={() => handleMarkPresent(record._id)}
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-8 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
-                                  >
-                                    <CheckCircle className="w-3 h-3 mr-1" />
-                                    Mark Present
-                                  </Button>
-                                )}
-                              </td>
-                            </tr>
-                          ))
+                        {mergedDailyRows.length > 0 ? (
+                          mergedDailyRows.map((record) => {
+                            const isMissing = record.isMissing;
+                            const isAutoLeave = record.status === 'Auto-Leave';
+                            const hasCheckOut = !!record.checkOutTime;
+
+                            // Determine status badge
+                            let badgeClass = 'bg-blue-100 text-blue-700';
+                            let badgeLabel = 'Working';
+                            if (isAutoLeave) {
+                              badgeClass = 'bg-rose-100 text-rose-700';
+                              badgeLabel = 'Leave';
+                            } else if (hasCheckOut) {
+                              badgeClass = 'bg-emerald-100 text-emerald-700';
+                              badgeLabel = 'Present';
+                            }
+
+                            return (
+                              <tr
+                                key={record._id}
+                                className={`transition-colors ${
+                                  isMissing
+                                    ? 'bg-rose-50/40 hover:bg-rose-50/70'
+                                    : 'hover:bg-gray-50/30'
+                                }`}
+                              >
+                                <td className="px-6 py-4 font-medium text-gray-900">
+                                  {new Date(record.date).toLocaleDateString('en-GB')}
+                                  {isMissing && (
+                                    <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">No record</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-gray-600">
+                                  {record.checkInTime && !isMissing
+                                    ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                                    : '-'}
+                                </td>
+                                <td className="px-6 py-4 text-gray-600">
+                                  {record.checkOutTime && !isMissing
+                                    ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                                    : '-'}
+                                </td>
+                                <td className="px-6 py-4 font-medium text-primary">
+                                  {record.totalHours ? `${record.totalHours}h` : '-'}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${badgeClass}`}>
+                                    {badgeLabel}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
+                                  {isMissing ? (
+                                    <span className="text-rose-400 italic text-xs">No check-in recorded</span>
+                                  ) : (
+                                    record.summary || '-'
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  {isMissing ? (
+                                    // Missing day: show both Mark as Leave and Mark Present
+                                    <div className="flex items-center justify-end gap-2">
+                                      <Button
+                                        onClick={() => handleMarkAbsent(record.date)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
+                                      >
+                                        <XCircle className="w-3 h-3 mr-1" />
+                                        Mark Leave
+                                      </Button>
+                                      <Button
+                                        onClick={() => handleCreateAndMarkPresent(record.date)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
+                                      >
+                                        <CheckCircle className="w-3 h-3 mr-1" />
+                                        Mark Present
+                                      </Button>
+                                    </div>
+                                  ) : (!hasCheckOut || isAutoLeave) ? (
+                                    // Existing record without checkout or marked Auto-Leave
+                                    <Button
+                                      onClick={() => handleMarkPresent(record._id)}
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
+                                    >
+                                      <CheckCircle className="w-3 h-3 mr-1" />
+                                      Mark Present
+                                    </Button>
+                                  ) : null}
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td colSpan="6" className="px-6 py-8 text-center text-gray-500">No attendance history found.</td>

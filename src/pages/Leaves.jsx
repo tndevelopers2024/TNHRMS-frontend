@@ -15,6 +15,7 @@ export default function Leaves() {
   const [showForm, setShowForm] = useState(false);
   const [leaves, setLeaves] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
   const user = JSON.parse(localStorage.getItem('userInfo') || '{}');
@@ -45,14 +46,14 @@ export default function Leaves() {
     return () => socket.off('notification', handleNotif);
   }, [socket]);
 
-  // Fetch leaves and attendance from backend
+  // Fetch leaves, attendance, profile and server-computed leave balance
   const fetchLeaves = async () => {
     if (!user._id) return;
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves/${user._id}`);
       const data = await res.json();
       setLeaves(data);
-      
+
       const attRes = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${user._id}`);
       const attData = await attRes.json();
       setAttendance(attData);
@@ -61,6 +62,13 @@ export default function Leaves() {
       if (profileRes.ok) {
         const profileData = await profileRes.json();
         setUserProfile(profileData);
+      }
+
+      // Fetch server-computed leave balance (always fresh — includes Auto-Leave records)
+      const balRes = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leave-balance/${user._id}`);
+      if (balRes.ok) {
+        const balData = await balRes.json();
+        setLeaveBalance(balData);
       }
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -263,24 +271,26 @@ export default function Leaves() {
     return today < start;
   };
 
-  // Calculate dynamically from fetched data (Only count Approved leaves)
-  const calcUsed = (type) => {
-    let used = leaves
-      .filter(l => l.type === type && (l.status === 'Approved' || l.status === 'Pending'))
-      .reduce((acc, curr) => acc + curr.days, 0);
-      
-    if (type === 'Casual Leave') {
-      const autoLeaves = attendance.filter(a => a.status === 'Auto-Leave').length;
-      const halfLeaves = attendance.filter(a => a.status === 'Half-Day Leave').length;
-      used += autoLeaves + (halfLeaves * 0.5);
-    }
-    return used;
-  };
-
+  // Use server-computed balances (fresh from DB, includes Auto-Leave attendance records)
   const leaveBalances = [
-    { type: "Casual Leave", total: userProfile?.casualLeaves !== undefined ? userProfile.casualLeaves : 3, used: calcUsed("Casual Leave"), color: "bg-primary" },
-    { type: "Sick Leave", total: userProfile?.sickLeaves !== undefined ? userProfile.sickLeaves : 6, used: calcUsed("Sick Leave"), color: "bg-rose-500" },
-    { type: "Earned Leave", total: userProfile?.earnedLeaves || 0, used: calcUsed("Earned Leave"), color: "bg-emerald-500" },
+    {
+      type: "Casual Leave",
+      total: leaveBalance?.casual?.total ?? (userProfile?.casualLeaves ?? 3),
+      used:  leaveBalance?.casual?.used  ?? 0,
+      color: "bg-primary"
+    },
+    {
+      type: "Sick Leave",
+      total: leaveBalance?.sick?.total ?? (userProfile?.sickLeaves ?? 6),
+      used:  leaveBalance?.sick?.used  ?? 0,
+      color: "bg-rose-500"
+    },
+    {
+      type: "Earned Leave",
+      total: leaveBalance?.earned?.total ?? (userProfile?.earnedLeaves ?? 0),
+      used:  leaveBalance?.earned?.used  ?? 0,
+      color: "bg-emerald-500"
+    },
   ];
 
   const totalRemaining = leaveBalances.reduce((acc, curr) => acc + Math.max(0, curr.total - curr.used), 0);

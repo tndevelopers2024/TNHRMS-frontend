@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
@@ -47,6 +47,61 @@ export default function Attendance() {
 
     return yearMatch && monthMatch;
   });
+
+  // Check if a JS Date is a working day (Mon-Sat, skip 2nd Saturday)
+  const isWorkingDay = (d) => {
+    const day = d.getDay();
+    if (day === 0) return false; // Sunday
+    if (day === 6 && d.getDate() >= 8 && d.getDate() <= 14) return false; // 2nd Saturday
+    return true;
+  };
+
+  // Fill gaps: add placeholder Leave rows for working days with no attendance record
+  const mergedDailyRows = useMemo(() => {
+    if (filteredHistory.length === 0) return [];
+
+    const recordsByDate = {};
+    filteredHistory.forEach(r => { recordsByDate[r.date] = r; });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const sortedDates = filteredHistory.map(r => r.date).sort();
+    const startDate = new Date(sortedDates[0]);
+    startDate.setHours(0, 0, 0, 0);
+
+    const rows = [];
+    const cursor = new Date(startDate);
+    while (cursor <= yesterday) {
+      const dateStr = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
+      if (recordsByDate[dateStr]) {
+        rows.push({ ...recordsByDate[dateStr], isMissing: false });
+      } else if (isWorkingDay(cursor)) {
+        rows.push({
+          _id: `missing-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Auto-Leave',
+          summary: null,
+          isMissing: true,
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    // Also include today's record if it exists (don't fill today as missing)
+    const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    if (recordsByDate[todayStr]) {
+      rows.push({ ...recordsByDate[todayStr], isMissing: false });
+    }
+
+    rows.sort((a, b) => (a.date > b.date ? -1 : 1));
+    return rows;
+  }, [filteredHistory]);
 
   const exportToCSV = () => {
     let headers = [];
@@ -189,35 +244,55 @@ export default function Attendance() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {filteredHistory.length > 0 ? (
-                      filteredHistory.map((record) => (
-                        <tr key={record._id} className="hover:bg-gray-50/30 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-900">
-                            {new Date(record.date).toLocaleDateString('en-GB')}
-                          </td>
-                          <td className="px-6 py-4 text-gray-600">
-                            {record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-gray-600">
-                            {record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '-'}
-                          </td>
-                          <td className="px-6 py-4 font-medium text-primary">
-                            {record.totalHours ? `${record.totalHours}h` : '-'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                              record.status === 'Auto-Leave' ? 'bg-rose-100 text-rose-700' : 
-                              record.status === 'Half-Day Leave' ? 'bg-amber-100 text-amber-700' :
-                              record.checkOutTime ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {record.status === 'Auto-Leave' ? 'Leave' : record.status === 'Half-Day Leave' ? 'Half Day' : record.checkOutTime ? 'Present' : 'Working'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
-                            {record.summary || '-'}
-                          </td>
-                        </tr>
-                      ))
+                    {mergedDailyRows.length > 0 ? (
+                      mergedDailyRows.map((record) => {
+                        const isMissing = record.isMissing;
+                        const isAutoLeave = record.status === 'Auto-Leave';
+                        const hasCheckOut = !!record.checkOutTime;
+
+                        let badgeClass = 'bg-blue-100 text-blue-700';
+                        let badgeLabel = 'Working';
+                        if (isAutoLeave) { badgeClass = 'bg-rose-100 text-rose-700'; badgeLabel = 'Leave'; }
+                        else if (record.status === 'Half-Day Leave') { badgeClass = 'bg-amber-100 text-amber-700'; badgeLabel = 'Half Day'; }
+                        else if (hasCheckOut) { badgeClass = 'bg-emerald-100 text-emerald-700'; badgeLabel = 'Present'; }
+
+                        return (
+                          <tr
+                            key={record._id}
+                            className={`transition-colors ${isMissing ? 'bg-rose-50/40 hover:bg-rose-50/60' : 'hover:bg-gray-50/30'}`}
+                          >
+                            <td className="px-6 py-4 font-medium text-gray-900">
+                              {new Date(record.date).toLocaleDateString('en-GB')}
+                              {isMissing && (
+                                <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">No record</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-gray-600">
+                              {record.checkInTime && !isMissing
+                                ? new Date(record.checkInTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                                : '-'}
+                            </td>
+                            <td className="px-6 py-4 text-gray-600">
+                              {record.checkOutTime && !isMissing
+                                ? new Date(record.checkOutTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                                : '-'}
+                            </td>
+                            <td className="px-6 py-4 font-medium text-primary">
+                              {record.totalHours ? `${record.totalHours}h` : '-'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${badgeClass}`}>
+                                {badgeLabel}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
+                              {isMissing
+                                ? <span className="text-rose-400 italic text-xs">No check-in recorded</span>
+                                : record.summary || '-'}
+                            </td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
                         <td colSpan="5" className="px-6 py-8 text-center text-gray-500">No attendance history found.</td>
