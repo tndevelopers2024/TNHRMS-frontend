@@ -167,15 +167,21 @@ export default function Leaves() {
       days = Math.max(0.5, days - 0.5);
     }
 
-    const balanceConfig = {
-      "Casual Leave": userProfile?.casualLeaves !== undefined ? userProfile.casualLeaves : 3,
-      "Sick Leave": userProfile?.sickLeaves !== undefined ? userProfile.sickLeaves : 6,
-      "Earned Leave": userProfile?.earnedLeaves || 0
-    };
+    let maxDays = 0;
+    let currentlyUsed = 0;
+    
+    if (formData.type === "Casual Leave") {
+      maxDays = leaveBalance?.casual?.total ?? (userProfile?.casualLeaves ?? 3);
+      currentlyUsed = leaveBalance?.casual?.used ?? 0;
+    } else if (formData.type === "Sick Leave") {
+      maxDays = leaveBalance?.sick?.total ?? (userProfile?.sickLeaves ?? 6);
+      currentlyUsed = leaveBalance?.sick?.used ?? 0;
+    } else if (formData.type === "Earned Leave") {
+      maxDays = leaveBalance?.earned?.total ?? (userProfile?.earnedLeaves ?? 0);
+      currentlyUsed = leaveBalance?.earned?.used ?? 0;
+    }
 
-    const maxDays = balanceConfig[formData.type];
-    const currentlyUsed = calcUsed(formData.type);
-    const remainingBalance = Math.max(0, (maxDays || 0) - currentlyUsed);
+    const remainingBalance = Math.max(0, maxDays - currentlyUsed);
 
     const submitLeaveForm = async (calculatedDays) => {
       try {
