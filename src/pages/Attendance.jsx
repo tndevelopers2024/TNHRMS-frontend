@@ -70,11 +70,11 @@ export default function Attendance() {
     const recordsByDate = {};
     filteredHistory.forEach(r => { recordsByDate[r.date] = r; });
 
-    const holidayDates = new Set();
+    const holidayMap = new Map();
     holidays.forEach(h => {
       const hDate = new Date(h.date);
       const hStr = hDate.getFullYear() + '-' + String(hDate.getMonth() + 1).padStart(2, '0') + '-' + String(hDate.getDate()).padStart(2, '0');
-      holidayDates.add(hStr);
+      holidayMap.set(hStr, h);
     });
 
     const today = new Date();
@@ -92,7 +92,19 @@ export default function Attendance() {
       const dateStr = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
       if (recordsByDate[dateStr]) {
         rows.push({ ...recordsByDate[dateStr], isMissing: false });
-      } else if (isWorkingDay(cursor) && !holidayDates.has(dateStr)) {
+      } else if (holidayMap.has(dateStr)) {
+        rows.push({
+          _id: `holiday-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Holiday',
+          summary: holidayMap.get(dateStr).name,
+          isMissing: false,
+          isHoliday: true,
+        });
+      } else if (isWorkingDay(cursor)) {
         rows.push({
           _id: `missing-${dateStr}`,
           date: dateStr,
@@ -102,6 +114,18 @@ export default function Attendance() {
           status: 'Auto-Leave',
           summary: null,
           isMissing: true,
+        });
+      } else {
+        rows.push({
+          _id: `weekend-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Weekend',
+          summary: cursor.getDay() === 0 ? 'Sunday' : '2nd Saturday',
+          isMissing: false,
+          isWeekend: true,
         });
       }
       cursor.setDate(cursor.getDate() + 1);
@@ -267,6 +291,8 @@ export default function Attendance() {
                         let badgeClass = 'bg-blue-100 text-blue-700';
                         let badgeLabel = 'Working';
                         if (isAutoLeave) { badgeClass = 'bg-rose-100 text-rose-700'; badgeLabel = 'Leave'; }
+                        else if (record.status === 'Holiday') { badgeClass = 'bg-purple-100 text-purple-700'; badgeLabel = 'Holiday'; }
+                        else if (record.status === 'Weekend') { badgeClass = 'bg-gray-100 text-gray-700'; badgeLabel = 'Weekend'; }
                         else if (record.status === 'Half-Day Leave') { badgeClass = 'bg-amber-100 text-amber-700'; badgeLabel = 'Half Day'; }
                         else if (hasCheckOut) { badgeClass = 'bg-emerald-100 text-emerald-700'; badgeLabel = 'Present'; }
 
@@ -279,6 +305,12 @@ export default function Attendance() {
                               {new Date(record.date).toLocaleDateString('en-GB')}
                               {isMissing && (
                                 <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">No record</span>
+                              )}
+                              {record.isHoliday && (
+                                <span className="ml-2 text-[9px] font-semibold uppercase text-purple-400 tracking-wide">Holiday</span>
+                              )}
+                              {record.isWeekend && (
+                                <span className="ml-2 text-[9px] font-semibold uppercase text-gray-400 tracking-wide">Weekly Off</span>
                               )}
                             </td>
                             <td className="px-6 py-4 text-gray-600">
@@ -300,9 +332,15 @@ export default function Attendance() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
-                              {isMissing
-                                ? <span className="text-rose-400 italic text-xs">No check-in recorded</span>
-                                : record.summary || '-'}
+                              {isMissing ? (
+                                <span className="text-rose-400 italic text-xs">No check-in recorded</span>
+                              ) : record.isHoliday ? (
+                                <span className="text-purple-600 font-medium italic">{record.summary}</span>
+                              ) : record.isWeekend ? (
+                                <span className="text-gray-400 font-medium italic">{record.summary}</span>
+                              ) : (
+                                record.summary || '-'
+                              )}
                             </td>
                           </tr>
                         );

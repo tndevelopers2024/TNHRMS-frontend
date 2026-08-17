@@ -270,11 +270,11 @@ export default function AdminAttendance() {
     const recordsByDate = {};
     filteredHistory.forEach(r => { recordsByDate[r.date] = r; });
 
-    const holidayDates = new Set();
+    const holidayMap = new Map();
     holidays.forEach(h => {
       const hDate = new Date(h.date);
       const hStr = hDate.getFullYear() + '-' + String(hDate.getMonth() + 1).padStart(2, '0') + '-' + String(hDate.getDate()).padStart(2, '0');
-      holidayDates.add(hStr);
+      holidayMap.set(hStr, h);
     });
 
     // Determine range: from the earliest record date to yesterday (not today)
@@ -299,7 +299,19 @@ export default function AdminAttendance() {
       if (recordsByDate[dateStr]) {
         // Real record exists
         rows.push({ ...recordsByDate[dateStr], isMissing: false });
-      } else if (isWorkingDay(cursor) && !holidayDates.has(dateStr)) {
+      } else if (holidayMap.has(dateStr)) {
+        rows.push({
+          _id: `holiday-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Holiday',
+          summary: holidayMap.get(dateStr).name,
+          isMissing: false,
+          isHoliday: true,
+        });
+      } else if (isWorkingDay(cursor)) {
         // Missing working day — show as Leave placeholder
         rows.push({
           _id: `missing-${dateStr}`,
@@ -310,6 +322,18 @@ export default function AdminAttendance() {
           status: 'Auto-Leave',
           summary: null,
           isMissing: true, // flag to render differently
+        });
+      } else {
+        rows.push({
+          _id: `weekend-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Weekend',
+          summary: cursor.getDay() === 0 ? 'Sunday' : '2nd Saturday',
+          isMissing: false,
+          isWeekend: true,
         });
       }
 
@@ -646,6 +670,12 @@ export default function AdminAttendance() {
                             if (isAutoLeave) {
                               badgeClass = 'bg-rose-100 text-rose-700';
                               badgeLabel = 'Leave';
+                            } else if (record.status === 'Holiday') {
+                              badgeClass = 'bg-purple-100 text-purple-700';
+                              badgeLabel = 'Holiday';
+                            } else if (record.status === 'Weekend') {
+                              badgeClass = 'bg-gray-100 text-gray-700';
+                              badgeLabel = 'Weekend';
                             } else if (hasCheckOut) {
                               badgeClass = 'bg-emerald-100 text-emerald-700';
                               badgeLabel = 'Present';
@@ -664,6 +694,12 @@ export default function AdminAttendance() {
                                   {new Date(record.date).toLocaleDateString('en-GB')}
                                   {isMissing && (
                                     <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">No record</span>
+                                  )}
+                                  {record.isHoliday && (
+                                    <span className="ml-2 text-[9px] font-semibold uppercase text-purple-400 tracking-wide">Holiday</span>
+                                  )}
+                                  {record.isWeekend && (
+                                    <span className="ml-2 text-[9px] font-semibold uppercase text-gray-400 tracking-wide">Weekly Off</span>
                                   )}
                                 </td>
                                 <td className="px-6 py-4 text-gray-600">
@@ -687,6 +723,10 @@ export default function AdminAttendance() {
                                 <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
                                   {isMissing ? (
                                     <span className="text-rose-400 italic text-xs">No check-in recorded</span>
+                                  ) : record.isHoliday ? (
+                                    <span className="text-purple-600 font-medium italic">{record.summary}</span>
+                                  ) : record.isWeekend ? (
+                                    <span className="text-gray-400 font-medium italic">{record.summary}</span>
                                   ) : (
                                     record.summary || '-'
                                   )}
@@ -714,7 +754,7 @@ export default function AdminAttendance() {
                                         Mark Present
                                       </Button>
                                     </div>
-                                  ) : (!hasCheckOut || isAutoLeave) ? (
+                                  ) : (record.isHoliday || record.isWeekend) ? null : (!hasCheckOut || isAutoLeave) ? (
                                     // Existing record without checkout or marked Auto-Leave
                                     <Button
                                       onClick={() => handleMarkPresent(record._id)}
