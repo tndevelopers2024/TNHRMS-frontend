@@ -21,6 +21,7 @@ export default function AdminAttendance() {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [employeeAttendance, setEmployeeAttendance] = useState([]);
+  const [holidays, setHolidays] = useState([]);
   const [reportTab, setReportTab] = useState('daily'); // 'daily', 'weekly', 'monthly'
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedMonth, setSelectedMonth] = useState('All');
@@ -36,6 +37,7 @@ export default function AdminAttendance() {
   useEffect(() => {
     fetchTodayAttendance();
     fetchEmployees();
+    fetchHolidays();
   }, []);
 
   useEffect(() => {
@@ -71,6 +73,16 @@ export default function AdminAttendance() {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/employees`);
       const data = await res.json();
       setEmployees(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchHolidays = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/holidays`);
+      const data = await res.json();
+      setHolidays(data);
     } catch (err) {
       console.error(err);
     }
@@ -258,6 +270,13 @@ export default function AdminAttendance() {
     const recordsByDate = {};
     filteredHistory.forEach(r => { recordsByDate[r.date] = r; });
 
+    const holidayDates = new Set();
+    holidays.forEach(h => {
+      const hDate = new Date(h.date);
+      const hStr = hDate.getFullYear() + '-' + String(hDate.getMonth() + 1).padStart(2, '0') + '-' + String(hDate.getDate()).padStart(2, '0');
+      holidayDates.add(hStr);
+    });
+
     // Determine range: from the earliest record date to yesterday (not today)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -280,7 +299,7 @@ export default function AdminAttendance() {
       if (recordsByDate[dateStr]) {
         // Real record exists
         rows.push({ ...recordsByDate[dateStr], isMissing: false });
-      } else if (isWorkingDay(cursor)) {
+      } else if (isWorkingDay(cursor) && !holidayDates.has(dateStr)) {
         // Missing working day — show as Leave placeholder
         rows.push({
           _id: `missing-${dateStr}`,
@@ -300,7 +319,7 @@ export default function AdminAttendance() {
     // Sort descending (newest first)
     rows.sort((a, b) => (a.date > b.date ? -1 : 1));
     return rows;
-  }, [filteredHistory, selectedEmployeeId]);
+  }, [filteredHistory, selectedEmployeeId, holidays]);
 
   const exportReportCSV = () => {
     let headers = [];

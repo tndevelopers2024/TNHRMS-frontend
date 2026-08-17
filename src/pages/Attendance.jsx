@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 
 export default function Attendance() {
   const [attendanceHistory, setAttendanceHistory] = useState([]);
+  const [holidays, setHolidays] = useState([]);
   const [activeTab, setActiveTab] = useState('daily');
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedMonth, setSelectedMonth] = useState('All');
@@ -20,6 +21,12 @@ export default function Attendance() {
         
         if (Array.isArray(data)) {
           setAttendanceHistory(data);
+        }
+
+        const holidayRes = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/holidays`);
+        const holidayData = await holidayRes.json();
+        if (Array.isArray(holidayData)) {
+          setHolidays(holidayData);
         }
       } catch (err) {
         console.error(err);
@@ -63,6 +70,13 @@ export default function Attendance() {
     const recordsByDate = {};
     filteredHistory.forEach(r => { recordsByDate[r.date] = r; });
 
+    const holidayDates = new Set();
+    holidays.forEach(h => {
+      const hDate = new Date(h.date);
+      const hStr = hDate.getFullYear() + '-' + String(hDate.getMonth() + 1).padStart(2, '0') + '-' + String(hDate.getDate()).padStart(2, '0');
+      holidayDates.add(hStr);
+    });
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today);
@@ -78,7 +92,7 @@ export default function Attendance() {
       const dateStr = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
       if (recordsByDate[dateStr]) {
         rows.push({ ...recordsByDate[dateStr], isMissing: false });
-      } else if (isWorkingDay(cursor)) {
+      } else if (isWorkingDay(cursor) && !holidayDates.has(dateStr)) {
         rows.push({
           _id: `missing-${dateStr}`,
           date: dateStr,
@@ -101,7 +115,7 @@ export default function Attendance() {
 
     rows.sort((a, b) => (a.date > b.date ? -1 : 1));
     return rows;
-  }, [filteredHistory]);
+  }, [filteredHistory, holidays]);
 
   const exportToCSV = () => {
     let headers = [];
