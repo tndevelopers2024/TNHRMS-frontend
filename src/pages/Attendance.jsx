@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 export default function Attendance() {
   const [attendanceHistory, setAttendanceHistory] = useState([]);
   const [holidays, setHolidays] = useState([]);
+  const [leaves, setLeaves] = useState([]);
   const [activeTab, setActiveTab] = useState('daily');
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedMonth, setSelectedMonth] = useState('All');
@@ -27,6 +28,12 @@ export default function Attendance() {
         const holidayData = await holidayRes.json();
         if (Array.isArray(holidayData)) {
           setHolidays(holidayData);
+        }
+
+        const leaveRes = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves/${userInfo._id}`);
+        const leaveData = await leaveRes.json();
+        if (Array.isArray(leaveData)) {
+          setLeaves(leaveData);
         }
       } catch (err) {
         console.error(err);
@@ -77,6 +84,18 @@ export default function Attendance() {
       holidayMap.set(hStr, h);
     });
 
+    const leaveMap = new Map();
+    leaves.filter(l => l.status === 'Approved').forEach(l => {
+      const start = new Date(l.startDate);
+      const end = new Date(l.endDate);
+      let current = new Date(start);
+      while (current <= end) {
+        const dStr = current.getFullYear() + '-' + String(current.getMonth() + 1).padStart(2, '0') + '-' + String(current.getDate()).padStart(2, '0');
+        leaveMap.set(dStr, l);
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today);
@@ -92,6 +111,19 @@ export default function Attendance() {
       const dateStr = cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0') + '-' + String(cursor.getDate()).padStart(2, '0');
       if (recordsByDate[dateStr]) {
         rows.push({ ...recordsByDate[dateStr], isMissing: false });
+      } else if (leaveMap.has(dateStr)) {
+        rows.push({
+          _id: `leave-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Auto-Leave',
+          summary: leaveMap.get(dateStr).reason,
+          isMissing: false,
+          isApprovedLeave: true,
+          leaveType: leaveMap.get(dateStr).type
+        });
       } else if (holidayMap.has(dateStr)) {
         rows.push({
           _id: `holiday-${dateStr}`,
@@ -139,7 +171,7 @@ export default function Attendance() {
 
     rows.sort((a, b) => (a.date > b.date ? -1 : 1));
     return rows;
-  }, [filteredHistory, holidays]);
+  }, [filteredHistory, holidays, leaves]);
 
   const exportToCSV = () => {
     let headers = [];
@@ -306,6 +338,9 @@ export default function Attendance() {
                               {isMissing && (
                                 <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">No record</span>
                               )}
+                              {record.isApprovedLeave && (
+                                <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">{record.leaveType}</span>
+                              )}
                               {record.isHoliday && (
                                 <span className="ml-2 text-[9px] font-semibold uppercase text-purple-400 tracking-wide">Holiday</span>
                               )}
@@ -334,6 +369,8 @@ export default function Attendance() {
                             <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
                               {isMissing ? (
                                 <span className="text-rose-400 italic text-xs">No check-in recorded</span>
+                              ) : record.isApprovedLeave ? (
+                                <span className="text-rose-600 font-medium italic">Approved Leave: {record.summary}</span>
                               ) : record.isHoliday ? (
                                 <span className="text-purple-600 font-medium italic">{record.summary}</span>
                               ) : record.isWeekend ? (

@@ -21,6 +21,7 @@ export default function AdminAttendance() {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [employeeAttendance, setEmployeeAttendance] = useState([]);
+  const [employeeLeaves, setEmployeeLeaves] = useState([]);
   const [holidays, setHolidays] = useState([]);
   const [reportTab, setReportTab] = useState('daily'); // 'daily', 'weekly', 'monthly'
   const [selectedYear, setSelectedYear] = useState('All');
@@ -93,9 +94,13 @@ export default function AdminAttendance() {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/attendance/${userId}`);
       const data = await res.json();
       setEmployeeAttendance(data);
+
+      const leaveRes = await fetch(`${import.meta.env.VITE_API_URL}/api/employee/leaves/${userId}`);
+      const leaveData = await leaveRes.json();
+      setEmployeeLeaves(Array.isArray(leaveData) ? leaveData : []);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to fetch employee attendance");
+      toast.error("Failed to fetch employee attendance or leaves");
     }
   };
 
@@ -277,6 +282,18 @@ export default function AdminAttendance() {
       holidayMap.set(hStr, h);
     });
 
+    const leaveMap = new Map();
+    employeeLeaves.filter(l => l.status === 'Approved').forEach(l => {
+      const start = new Date(l.startDate);
+      const end = new Date(l.endDate);
+      let current = new Date(start);
+      while (current <= end) {
+        const dStr = current.getFullYear() + '-' + String(current.getMonth() + 1).padStart(2, '0') + '-' + String(current.getDate()).padStart(2, '0');
+        leaveMap.set(dStr, l);
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
     // Determine range: from the earliest record date to yesterday (not today)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -299,6 +316,19 @@ export default function AdminAttendance() {
       if (recordsByDate[dateStr]) {
         // Real record exists
         rows.push({ ...recordsByDate[dateStr], isMissing: false });
+      } else if (leaveMap.has(dateStr)) {
+        rows.push({
+          _id: `leave-${dateStr}`,
+          date: dateStr,
+          checkInTime: null,
+          checkOutTime: null,
+          totalHours: null,
+          status: 'Auto-Leave',
+          summary: leaveMap.get(dateStr).reason,
+          isMissing: false,
+          isApprovedLeave: true,
+          leaveType: leaveMap.get(dateStr).type
+        });
       } else if (holidayMap.has(dateStr)) {
         rows.push({
           _id: `holiday-${dateStr}`,
@@ -343,7 +373,7 @@ export default function AdminAttendance() {
     // Sort descending (newest first)
     rows.sort((a, b) => (a.date > b.date ? -1 : 1));
     return rows;
-  }, [filteredHistory, selectedEmployeeId, holidays]);
+  }, [filteredHistory, selectedEmployeeId, holidays, employeeLeaves]);
 
   const exportReportCSV = () => {
     let headers = [];
@@ -695,6 +725,9 @@ export default function AdminAttendance() {
                                   {isMissing && (
                                     <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">No record</span>
                                   )}
+                                  {record.isApprovedLeave && (
+                                    <span className="ml-2 text-[9px] font-semibold uppercase text-rose-400 tracking-wide">{record.leaveType}</span>
+                                  )}
                                   {record.isHoliday && (
                                     <span className="ml-2 text-[9px] font-semibold uppercase text-purple-400 tracking-wide">Holiday</span>
                                   )}
@@ -723,6 +756,8 @@ export default function AdminAttendance() {
                                 <td className="px-6 py-4 text-gray-500 max-w-xs break-words whitespace-normal">
                                   {isMissing ? (
                                     <span className="text-rose-400 italic text-xs">No check-in recorded</span>
+                                  ) : record.isApprovedLeave ? (
+                                    <span className="text-rose-600 font-medium italic">Approved Leave: {record.summary}</span>
                                   ) : record.isHoliday ? (
                                     <span className="text-purple-600 font-medium italic">{record.summary}</span>
                                   ) : record.isWeekend ? (
@@ -734,36 +769,36 @@ export default function AdminAttendance() {
                                 <td className="px-6 py-4 text-right">
                                   {isMissing ? (
                                     // Missing day: show both Mark as Leave and Mark Present
-                                    <div className="flex items-center justify-end gap-2">
+                                    <div className="flex items-center justify-end gap-1">
                                       <Button
                                         onClick={() => handleMarkAbsent(record.date)}
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
+                                        className="h-7 px-2 text-[11px] bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
                                       >
                                         <XCircle className="w-3 h-3 mr-1" />
-                                        Mark Leave
+                                        Leave
                                       </Button>
                                       <Button
                                         onClick={() => handleCreateAndMarkPresent(record.date)}
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
+                                        className="h-7 px-2 text-[11px] bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
                                       >
                                         <CheckCircle className="w-3 h-3 mr-1" />
-                                        Mark Present
+                                        Present
                                       </Button>
                                     </div>
-                                  ) : (record.isHoliday || record.isWeekend) ? null : (!hasCheckOut || isAutoLeave) ? (
+                                  ) : (record.isHoliday || record.isWeekend || record.isApprovedLeave) ? null : (!hasCheckOut || isAutoLeave) ? (
                                     // Existing record without checkout or marked Auto-Leave
                                     <Button
                                       onClick={() => handleMarkPresent(record._id)}
                                       variant="outline"
                                       size="sm"
-                                      className="h-8 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
+                                      className="h-7 px-2 text-[11px] bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
                                     >
                                       <CheckCircle className="w-3 h-3 mr-1" />
-                                      Mark Present
+                                      Present
                                     </Button>
                                   ) : null}
                                 </td>
