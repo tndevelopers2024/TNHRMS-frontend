@@ -18,7 +18,8 @@ import {
   CheckSquare,
   Users,
   Play,
-  Activity
+  Activity,
+  Receipt
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,7 @@ const adminLinks = [
   { name: 'Leave Balances', path: '/admin/leave-balances', icon: FileText },
   { name: 'Manage Holidays', path: '/admin/holidays', icon: CalendarDays },
   { name: 'Payroll', path: '/admin/payroll', icon: Wallet },
+  { name: 'Invoices', path: '/admin/invoices', icon: Receipt },
   { name: 'Profile', path: '/profile', icon: User },
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
@@ -204,6 +206,10 @@ function DashboardLayoutContent() {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/notifications`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (res.status === 401) {
+          // Token is expired or unauthorized
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           setNotifications(data);
