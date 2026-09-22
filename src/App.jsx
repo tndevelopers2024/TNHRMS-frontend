@@ -19,6 +19,7 @@ import AdminAttendance from './pages/admin/AdminAttendance';
 import AdminPayroll from './pages/admin/AdminPayroll'; 
 import AdminLeaveBalances from './pages/admin/AdminLeaveBalances';
 import AdminInvoices from './pages/admin/AdminInvoices';
+import CreateInvoice from './pages/admin/CreateInvoice';
 import ViewInvoicePublic from './pages/ViewInvoicePublic';
 import Settings from './pages/Settings';
 import ComingSoon from './pages/ComingSoon';
@@ -107,6 +108,8 @@ function App() {
             <Route path="admin/payroll" element={<AdminPayroll />} />
             <Route path="admin/leave-balances" element={<AdminLeaveBalances />} />
             <Route path="admin/invoices" element={<AdminInvoices />} />
+            <Route path="admin/invoices/create" element={<CreateInvoice />} />
+            <Route path="admin/invoices/edit/:id" element={<CreateInvoice />} />
             
             {/* Catch-all for authenticated users */}
             <Route path="*" element={<ComingSoon />} />

@@ -244,16 +244,16 @@ export default function InvoiceDocument({ invoice }) {
             </div>
           )}
 
-          {invoice.terms && (
-            <div className="p-3 rounded-xl border border-gray-100 bg-gray-50/50 text-xs">
+          {invoice.extraFields && invoice.extraFields.map((field, idx) => (
+            <div key={idx} className="p-3 rounded-xl border border-gray-100 bg-gray-50/50 text-xs mt-2">
               <span className="font-bold text-gray-700 uppercase tracking-wider text-[10px] block mb-1">
-                Terms and conditions
+                {field.label}
               </span>
-              <p className="text-gray-500 leading-relaxed text-[11px]">
-                {invoice.terms}
+              <p className="text-gray-500 leading-relaxed text-[11px] whitespace-pre-wrap">
+                {field.value}
               </p>
             </div>
-          )}
+          ))}
         </div>
 
         {/* Financial Summary */}
