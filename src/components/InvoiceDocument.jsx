@@ -51,7 +51,7 @@ export default function InvoiceDocument({ invoice }) {
           <div className="text-xs text-gray-500 mt-2.5 space-y-0.5">
             {invoice.sender?.taxId && (
               <p className="font-mono">
-                <span className="text-gray-400">Tax ID: </span>
+                <span className="text-gray-400">{invoice.sender.taxIdLabel || 'Tax ID'}: </span>
                 {invoice.sender.taxId}
               </p>
             )}
@@ -68,10 +68,10 @@ export default function InvoiceDocument({ invoice }) {
 
         <div className="sm:text-right">
           <span className="text-2xl sm:text-3xl font-black text-gray-900 tracking-wider block uppercase">
-            {invoice.invoiceType || 'INVOICE'}
+            {invoice.invoiceTitle || invoice.invoiceType || 'INVOICE'}
           </span>
           <div className="font-mono font-bold text-indigo-600 text-sm mt-1">
-            #{invoice.invoiceNumber}
+            #{invoice.customInvoiceNumber || invoice.invoiceNumber}
           </div>
           {invoice.orderNumber && (
             <div className="font-mono text-xs text-gray-600 mt-0.5">
@@ -112,7 +112,7 @@ export default function InvoiceDocument({ invoice }) {
             </h3>
             {invoice.client?.taxId && (
               <p className="font-mono text-gray-600 mt-0.5">
-                <span className="text-gray-400">Tax ID: </span>
+                <span className="text-gray-400">{invoice.client.taxIdLabel || 'Tax ID'}: </span>
                 {invoice.client.taxId}
               </p>
             )}

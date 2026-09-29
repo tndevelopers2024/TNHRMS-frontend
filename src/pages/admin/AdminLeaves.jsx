@@ -13,6 +13,7 @@ import { FileDown, Eye } from "lucide-react";
 export default function AdminLeaves() {
   const [requests, setRequests] = useState([]);
   const [viewerData, setViewerData] = useState({ isOpen: false, url: '' });
+  const [selectedReason, setSelectedReason] = useState(null);
   const { confirm } = useConfirm();
 
   const socket = useSocket();
@@ -107,11 +108,21 @@ export default function AdminLeaves() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-gray-500 max-w-xs truncate" title={req.reason}>{req.reason}</div>
+                      <div className="text-gray-500 max-w-xs truncate" title={req.reason}>
+                        {req.reason}
+                      </div>
+                      {req.reason && req.reason.length > 40 && (
+                        <button 
+                          onClick={() => setSelectedReason(req.reason)}
+                          className="text-[11px] font-medium text-blue-600 hover:text-blue-800 hover:underline mt-1"
+                        >
+                          Read more
+                        </button>
+                      )}
                       {req.attachment && (
                         <button 
                           onClick={() => setViewerData({ isOpen: true, url: req.attachment })}
-                          className="mt-2 inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors border border-blue-200"
+                          className="mt-2 inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors border border-blue-200 block"
                         >
                           <Eye className="w-3 h-3 mr-1" /> View Document
                         </button>
@@ -156,6 +167,21 @@ export default function AdminLeaves() {
         onClose={() => setViewerData({ isOpen: false, url: '' })}
         fileUrl={viewerData.url}
       />
+
+      {/* Reason Modal */}
+      {selectedReason && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">Leave Reason</h3>
+            <p className="text-gray-600 whitespace-pre-wrap text-sm leading-relaxed max-h-96 overflow-y-auto">
+              {selectedReason}
+            </p>
+            <div className="mt-6 flex justify-end">
+              <Button onClick={() => setSelectedReason(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

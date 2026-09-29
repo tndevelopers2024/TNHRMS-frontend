@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import {
   Receipt,
   Building2,
@@ -41,7 +43,9 @@ const EMPTY_BANKING = {
 
 const initialInvoiceState = {
   invoiceType: 'Invoice',
+  invoiceTitle: 'INVOICE',
   invoiceNumber: '',
+  customInvoiceNumber: '',
   orderNumber: '',
   issueDate: new Date().toISOString().split('T')[0],
   dueDate: '',
@@ -62,6 +66,7 @@ const initialInvoiceState = {
     name: '',
     companyName: '',
     taxId: '',
+    taxIdLabel: 'Tax ID',
     address: '',
     postalCode: '',
     email: '',
@@ -136,7 +141,9 @@ export default function CreateInvoice() {
             if (invoice) {
               setFormData({
                 invoiceType: invoice.invoiceType || 'Invoice',
+                invoiceTitle: invoice.invoiceTitle || (invoice.invoiceType || 'Invoice').toUpperCase(),
                 invoiceNumber: invoice.invoiceNumber,
+                customInvoiceNumber: invoice.customInvoiceNumber || '',
                 orderNumber: invoice.orderNumber || '',
                 currency: invoice.currency || 'INR',
                 issueDate: invoice.issueDate ? invoice.issueDate.split('T')[0] : '',
@@ -146,6 +153,7 @@ export default function CreateInvoice() {
                   name: invoice.client?.name || '',
                   companyName: invoice.client?.companyName || '',
                   taxId: invoice.client?.taxId || invoice.client?.gstin || '',
+                  taxIdLabel: invoice.client?.taxIdLabel || 'Tax ID',
                   address: invoice.client?.address || '',
                   postalCode: invoice.client?.postalCode || '',
                   email: invoice.client?.email || '',
@@ -218,6 +226,7 @@ export default function CreateInvoice() {
                 name: data.companyName || '',
                 companyName: data.companyName || '',
                 taxId: data.taxId || '',
+                taxIdLabel: data.taxIdLabel || 'Tax ID',
                 address: data.address || '',
                 postalCode: data.postalCode || '',
                 email: data.email || '',
@@ -241,6 +250,7 @@ export default function CreateInvoice() {
         setFormData({
           ...initialInvoiceState,
           invoiceType: initialType,
+          invoiceTitle: initialType.toUpperCase(),
           invoiceNumber: nextNumber,
           paymentDetails: bankDetails,
           sender: defaultSender,
@@ -265,6 +275,7 @@ export default function CreateInvoice() {
     setFormData((prev) => ({
       ...prev,
       invoiceType: newType,
+      invoiceTitle: newType.toUpperCase(),
       invoiceNumber: nextNum,
       paymentDetails: bankDetails,
     }));
@@ -488,7 +499,7 @@ export default function CreateInvoice() {
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">
                   {isEditing ? `Edit ${formData.invoiceType}` : `Create ${formData.invoiceType}`}
                 </h1>
-                {formData.invoiceNumber && (
+                {formData.invoiceNumber !== undefined && (
                   <span className="font-mono text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                     {formData.invoiceNumber}
                   </span>
@@ -502,22 +513,25 @@ export default function CreateInvoice() {
         </div>
 
         {/* Document Type Selector Tabs */}
-        <div className="flex items-center gap-2 p-1 bg-white border border-gray-200 shadow-sm rounded-2xl w-fit">
-          {['Invoice', 'Tax Invoice', 'Proforma Invoice'].map((type, idx) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => handleTypeChange(type)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                formData.invoiceType === type
-                  ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100'
-                  : 'text-gray-600 hover:text-gray-900 border border-transparent'
-              }`}
-            >
-              <span>{idx + 1}. {type}</span>
-              {formData.invoiceType === type && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-            </button>
-          ))}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 p-1 bg-white border border-gray-200 shadow-sm rounded-2xl w-fit">
+            {['Invoice', 'Tax Invoice', 'Proforma Invoice'].map((type, idx) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => handleTypeChange(type)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  formData.invoiceType === type
+                    ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100'
+                    : 'text-gray-600 hover:text-gray-900 border border-transparent'
+                }`}
+              >
+                <span>{idx + 1}. {type}</span>
+                {formData.invoiceType === type && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+              </button>
+            ))}
+          </div>
+
         </div>
       </div>
 
@@ -534,19 +548,59 @@ export default function CreateInvoice() {
               </h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Custom Invoice Number */}
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1">
+                  Invoice Number
+                </label>
+                <Input
+                  type="text"
+                  value={formData.customInvoiceNumber || ''}
+                  onChange={(e) => setFormData({ ...formData, customInvoiceNumber: e.target.value })}
+                  placeholder={formData.invoiceNumber || "Invoice #"}
+                  className="text-xs h-9 bg-white"
+                />
+              </div>
+
+              {/* Invoice Title */}
+              <div>
+                <label className="text-xs font-semibold text-gray-700 block mb-1">
+                  Invoice Title
+                </label>
+                <Input
+                  type="text"
+                  value={formData.invoiceTitle}
+                  onChange={(e) => setFormData({ ...formData, invoiceTitle: e.target.value.toUpperCase() })}
+                  placeholder="e.g. TAX INVOICE"
+                  className="text-xs h-9 bg-white uppercase"
+                />
+              </div>
+
               {/* Date */}
               <div>
                 <label className="text-xs font-semibold text-gray-700 block mb-1">
                   Date
                 </label>
-                <Input
-                  type="date"
-                  required
-                  value={formData.issueDate}
-                  onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
-                  className="text-xs h-9 bg-white"
-                />
+                <div className="relative">
+                  <DatePicker
+                    selected={formData.issueDate ? new Date(formData.issueDate) : null}
+                    onChange={(date) => {
+                      if (date) {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        setFormData({ ...formData, issueDate: `${year}-${month}-${day}` });
+                      } else {
+                        setFormData({ ...formData, issueDate: '' });
+                      }
+                    }}
+                    dateFormat="dd/MM/yyyy"
+                    className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 h-9"
+                    placeholderText="DD/MM/YYYY"
+                    required
+                  />
+                </div>
               </div>
 
               {/* Due date */}
@@ -554,13 +608,24 @@ export default function CreateInvoice() {
                 <label className="text-xs font-semibold text-gray-700 block mb-1">
                   Due date
                 </label>
-                <Input
-                  type="date"
-                  placeholder="DD/MM/YYYY"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                  className="text-xs h-9 bg-white"
-                />
+                <div className="relative">
+                  <DatePicker
+                    selected={formData.dueDate ? new Date(formData.dueDate) : null}
+                    onChange={(date) => {
+                      if (date) {
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        setFormData({ ...formData, dueDate: `${year}-${month}-${day}` });
+                      } else {
+                        setFormData({ ...formData, dueDate: '' });
+                      }
+                    }}
+                    dateFormat="dd/MM/yyyy"
+                    className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 h-9"
+                    placeholderText="DD/MM/YYYY"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -595,9 +660,18 @@ export default function CreateInvoice() {
 
               {/* Tax ID */}
               <div>
-                <label className="text-xs font-medium text-gray-700 block mb-1">
-                  Tax ID
-                </label>
+                <input
+                  type="text"
+                  value={formData.client.taxIdLabel}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      client: { ...formData.client, taxIdLabel: e.target.value },
+                    })
+                  }
+                  className="text-xs font-semibold text-gray-700 block mb-1 border border-gray-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-colors w-full max-w-[150px]"
+                  placeholder="e.g. GSTIN, VAT"
+                />
                 <Input
                   placeholder="E.g. 010101"
                   value={formData.client.taxId}

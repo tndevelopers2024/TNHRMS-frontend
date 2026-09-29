@@ -593,16 +593,21 @@ export default function AdminInvoices() {
                         >
                           {docType}
                         </span>
-                        <div className="mt-1">
+                        <div className="mt-1 flex flex-col items-start">
                           <button
                             onClick={() => {
                               setSelectedInvoice(invoice);
                               setShowPreviewModal(true);
                             }}
-                            className="font-mono font-bold text-gray-900 hover:text-indigo-600 hover:underline"
+                            className="font-mono font-bold text-gray-900 hover:text-indigo-600 hover:underline text-left"
                           >
                             {invoice.invoiceNumber}
                           </button>
+                          {invoice.customInvoiceNumber && invoice.customInvoiceNumber !== invoice.invoiceNumber && (
+                            <span className="text-[10px] font-mono font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5">
+                              {invoice.customInvoiceNumber}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -943,7 +948,13 @@ export default function AdminInvoices() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tax ID / GSTIN</label>
+                  <input
+                    type="text"
+                    value={companySettings.taxIdLabel !== undefined ? companySettings.taxIdLabel : 'Tax ID / GSTIN'}
+                    onChange={(e) => setCompanySettings({...companySettings, taxIdLabel: e.target.value})}
+                    className="text-sm font-semibold text-gray-700 block mb-1 border border-gray-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-colors w-full max-w-[200px]"
+                    placeholder="e.g. GSTIN, VAT"
+                  />
                   <Input 
                     value={companySettings.taxId || ''}
                     onChange={(e) => setCompanySettings({...companySettings, taxId: e.target.value})}
