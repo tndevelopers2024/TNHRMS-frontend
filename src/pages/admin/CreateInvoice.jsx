@@ -152,7 +152,7 @@ export default function CreateInvoice() {
     }
     const year = new Date().getFullYear();
     if (type === 'Proforma Invoice') return 'PRO-INV-001';
-    if (type === 'Tax Invoice') return '0001';
+    if (type === 'Tax Invoice') return '001';
     return `INV-${year}-0001`;
   };
 

@@ -6,7 +6,7 @@ export function displayInvoiceNumber(invoice) {
   const stored = String(invoice?.invoiceNumber || '');
   if (invoice?.invoiceType === 'Tax Invoice') {
     const m = stored.match(/(\d+)$/);
-    return m ? m[1].padStart(4, '0') : stored;
+    return m ? m[1].padStart(3, '0') : stored;
   }
   return stored;
 }
