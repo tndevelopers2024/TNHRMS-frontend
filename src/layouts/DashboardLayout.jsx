@@ -19,7 +19,9 @@ import {
   Users,
   Play,
   Activity,
-  Receipt
+  Receipt,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +57,24 @@ const adminLinks = [
 
 function DashboardLayoutContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Desktop only: collapse the sidebar to an icon rail. Remembered between visits.
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('sidebarCollapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      try {
+        localStorage.setItem('sidebarCollapsed', prev ? '0' : '1');
+      } catch {
+        // storage unavailable: the choice just won't be remembered
+      }
+      return !prev;
+    });
+  };
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
@@ -353,15 +373,18 @@ function DashboardLayoutContent() {
 
       {/* Left Sidebar */}
       <aside 
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white/80 backdrop-blur-xl border-r border-primary/10 shadow-[4px_0_24px_rgba(72,83,253,0.05)] transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto flex flex-col ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white/80 backdrop-blur-xl border-r border-primary/10 shadow-[4px_0_24px_rgba(72,83,253,0.05)] transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto flex flex-col shrink-0 ${
+          collapsed ? 'lg:w-20' : ''
+        } ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="flex items-center justify-center h-20 border-b border-gray-50">
-          <img src="/logo.png" alt="Logo" className="h-10" />
+          <img src="/logo.png" alt="Logo" className={`h-10 ${collapsed ? 'lg:hidden' : ''}`} />
+          {collapsed && (
+            <img src="/favicon.jpg" alt="Logo" className="hidden lg:block h-10 w-10 rounded-xl object-cover" />
+          )}
         </div>
         
-        <nav className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+        <nav className={`p-4 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar ${collapsed ? 'lg:px-3' : ''}`}>
           <div className="space-y-1.5">
             {availableLinks.map((link) => {
               const Icon = link.icon;
@@ -371,29 +394,49 @@ function DashboardLayoutContent() {
                 <Link
                   key={link.name}
                   to={link.path}
+                  title={collapsed ? link.name : undefined}
                   className={`flex items-center px-4 py-3.5 text-sm font-semibold rounded-2xl transition-all duration-300 ease-out group ${
+                    collapsed ? 'lg:justify-center lg:px-0 lg:translate-x-0 lg:hover:translate-x-0' : ''
+                  } ${
                     isActive 
                       ? 'bg-gradient-to-r from-primary to-[#905EFF] text-white shadow-lg shadow-primary/25 translate-x-1' 
                       : 'text-gray-500 hover:bg-primary/5 hover:text-primary hover:translate-x-1'
                   }`}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <Icon className={`w-5 h-5 mr-3 transition-colors duration-300 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-primary'}`} />
-                  {link.name}
+                  <Icon className={`w-5 h-5 mr-3 transition-colors duration-300 ${collapsed ? 'lg:mr-0' : ''} ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-primary'}`} />
+                  <span className={collapsed ? 'lg:hidden' : ''}>{link.name}</span>
                 </Link>
               )
             })}
           </div>
         </nav>
 
-          <div className="p-4 mt-auto border-t border-primary/10 bg-white/50">
+          <div className={`p-4 mt-auto border-t border-primary/10 bg-white/50 space-y-2 ${collapsed ? 'lg:px-3' : ''}`}>
+            {/* Collapse / expand (desktop only), just above Logout */}
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="hidden lg:flex items-center justify-center w-full px-4 py-2.5 text-sm font-semibold text-gray-500 bg-gray-50 hover:bg-primary/5 hover:text-primary rounded-2xl transition-all duration-300"
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="w-5 h-5" />
+              ) : (
+                <>
+                  <PanelLeftClose className="w-5 h-5 mr-2" />
+                  Collapse
+                </>
+              )}
+            </button>
             <Link
               to="/login"
               onClick={() => localStorage.removeItem('userInfo')}
+              title={collapsed ? 'Logout' : undefined}
               className="flex items-center justify-center w-full px-4 py-3.5 text-sm font-semibold text-rose-500 bg-rose-50 hover:bg-rose-500 hover:text-white rounded-2xl transition-all duration-300 shadow-sm hover:shadow-md hover:shadow-rose-500/20"
             >
-              <LogOut className="w-5 h-5 mr-2" />
-              Logout
+              <LogOut className={`w-5 h-5 mr-2 ${collapsed ? 'lg:mr-0' : ''}`} />
+              <span className={collapsed ? 'lg:hidden' : ''}>Logout</span>
             </Link>
           </div>
       </aside>

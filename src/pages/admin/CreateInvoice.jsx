@@ -15,14 +15,17 @@ import {
   Plus,
   Trash2,
   X,
+  Eye,
 } from 'lucide-react';
+import InvoiceDocument from '@/components/InvoiceDocument';
+import FitToView from '@/components/FitToView';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import toast from 'react-hot-toast';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 const DEFAULT_TAX_INVOICE_BANKING = {
-  primaryHolderName: 'TECHIENUTPAM (OPC) PRIVATE LIMITED',
+  primaryHolderName: 'TECHIENUTPAM PRIVATE LIMITED',
   accountNumber: '5020 0123 8459 51',
   accountType: 'Current Account',
   bankName: 'HDFC Bank',
@@ -55,6 +58,9 @@ const initialInvoiceState = {
     name: '',
     companyName: '',
     taxId: '',
+    pan: '',
+    stateName: '',
+    stateCode: '',
     address: '',
     postalCode: '',
     email: '',
@@ -67,6 +73,7 @@ const initialInvoiceState = {
     companyName: '',
     taxId: '',
     taxIdLabel: 'Tax ID',
+    pan: '',
     address: '',
     postalCode: '',
     email: '',
@@ -87,6 +94,9 @@ const initialInvoiceState = {
   notes: '',
 };
 
+// Documents that carry the company's bank details (what a client pays against)
+const hasBankDetails = (type) => type === 'Tax Invoice' || type === 'Proforma Invoice';
+
 const CURRENCY_SYMBOLS = {
   INR: '₹',
   USD: '$',
@@ -102,13 +112,28 @@ export default function CreateInvoice() {
 
   const [formData, setFormData] = useState(initialInvoiceState);
   const [isSaving, setIsSaving] = useState(false);
-  const [loading, setLoading] = useState(isEditing);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const duplicateId = searchParams.get('duplicate');
+  const [duplicatedFrom, setDuplicatedFrom] = useState('');
+  const [loading, setLoading] = useState(isEditing || Boolean(duplicateId));
 
   const [activeTaxPopoverIndex, setActiveTaxPopoverIndex] = useState(null);
   const [customTaxInput, setCustomTaxInput] = useState('');
 
   // Signature modal state
   const [showSignatureModal, setShowSignatureModal] = useState(false);
+
+  // Escape closes the open popup (the signature box, otherwise the preview), unless a save is running
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape' || isSaving) return;
+      if (showSignatureModal) setShowSignatureModal(false);
+      else if (showPreview) setShowPreview(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showSignatureModal, showPreview, isSaving]);
   const [signatureMode, setSignatureMode] = useState('typed');
   const [typedSignName, setTypedSignName] = useState('');
   const canvasRef = useRef(null);
@@ -126,9 +151,111 @@ export default function CreateInvoice() {
       console.error('Failed to fetch next number:', e);
     }
     const year = new Date().getFullYear();
-    const prefix = type === 'Tax Invoice' ? 'TAX' : type === 'Proforma Invoice' ? 'PRO' : 'INV';
-    return `${prefix}-${year}-0001`;
+    if (type === 'Proforma Invoice') return 'PRO-INV-001';
+    if (type === 'Tax Invoice') return '0001';
+    return `INV-${year}-0001`;
   };
+
+  // Issuer (company) and bank details come from Company Settings, so every document
+  // reads exactly the same: name, GST/UIN, address, phone, email, logo, bank.
+  const loadCompanyDefaults = async () => {
+    let sender = { ...initialInvoiceState.sender };
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/settings/company`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          sender = {
+            name: data.companyName || '',
+            companyName: data.companyName || '',
+            taxId: data.taxId || '',
+            taxIdLabel: data.taxIdLabel || 'Tax ID',
+            pan: data.pan || '',
+            stateName: data.stateName || '',
+            stateCode: data.stateCode || '',
+            address: data.address || '',
+            postalCode: data.postalCode || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            logoUrl: data.logoUrl || '/logo.png',
+            website: '',
+          };
+          // Keep the in-memory default in step so switching type uses the same bank
+          if (data.paymentDetails) Object.assign(DEFAULT_TAX_INVOICE_BANKING, data.paymentDetails);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching default company settings:', err);
+    }
+    return { sender, bank: { ...DEFAULT_TAX_INVOICE_BANKING } };
+  };
+
+  // Saved invoice -> form state (shared by edit and duplicate)
+  const invoiceToFormData = (invoice) => ({
+    invoiceType: invoice.invoiceType || 'Invoice',
+    invoiceTitle: invoice.invoiceTitle || (invoice.invoiceType || 'Invoice').toUpperCase(),
+    invoiceNumber: invoice.invoiceNumber,
+    customInvoiceNumber: invoice.customInvoiceNumber || '',
+    orderNumber: invoice.orderNumber || '',
+    currency: invoice.currency || 'INR',
+    issueDate: invoice.issueDate ? invoice.issueDate.split('T')[0] : '',
+    dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '',
+    status: invoice.status || 'Pending',
+    client: {
+      name: invoice.client?.name || '',
+      companyName: invoice.client?.companyName || '',
+      taxId: invoice.client?.taxId || invoice.client?.gstin || '',
+      taxIdLabel: invoice.client?.taxIdLabel || 'Tax ID',
+      pan: invoice.client?.pan || '',
+      address: invoice.client?.address || '',
+      postalCode: invoice.client?.postalCode || '',
+      email: invoice.client?.email || '',
+      phone: invoice.client?.phone || '',
+    },
+    sender: {
+      name: invoice.sender?.name || invoice.sender?.companyName || '',
+      companyName: invoice.sender?.companyName || '',
+      taxId: invoice.sender?.taxId || invoice.sender?.gstin || '',
+      pan: invoice.sender?.pan || '',
+      stateName: invoice.sender?.stateName || '',
+      stateCode: invoice.sender?.stateCode || '',
+      address: invoice.sender?.address || '',
+      postalCode: invoice.sender?.postalCode || '',
+      email: invoice.sender?.email || '',
+      phone: invoice.sender?.phone || '',
+      logoUrl: invoice.sender?.logoUrl !== undefined ? invoice.sender.logoUrl : '/logo.png',
+      website: invoice.sender?.website || '',
+    },
+    items: invoice.items?.length
+      ? invoice.items.map((it) => ({
+          description: it.description || '',
+          quantity: it.quantity,
+          rate: it.rate,
+          tax: it.tax || 0,
+          amount: it.amount,
+        }))
+      : [{ description: '', quantity: 1, rate: 0, tax: 0, amount: 0 }],
+    taxRate: invoice.taxRate ?? 0,
+    discount: invoice.discount ?? 0,
+    signature: invoice.signature || {
+      signatureType: 'typed',
+      signatoryName: '',
+      data: '',
+    },
+    paymentDetails: {
+      primaryHolderName: invoice.paymentDetails?.primaryHolderName || (hasBankDetails(invoice.invoiceType) ? DEFAULT_TAX_INVOICE_BANKING.primaryHolderName : ''),
+      accountNumber: invoice.paymentDetails?.accountNumber || (hasBankDetails(invoice.invoiceType) ? DEFAULT_TAX_INVOICE_BANKING.accountNumber : ''),
+      accountType: invoice.paymentDetails?.accountType || (hasBankDetails(invoice.invoiceType) ? DEFAULT_TAX_INVOICE_BANKING.accountType : ''),
+      bankName: invoice.paymentDetails?.bankName || (hasBankDetails(invoice.invoiceType) ? DEFAULT_TAX_INVOICE_BANKING.bankName : ''),
+      ifscCode: invoice.paymentDetails?.ifscCode || (hasBankDetails(invoice.invoiceType) ? DEFAULT_TAX_INVOICE_BANKING.ifscCode : ''),
+      branch: invoice.paymentDetails?.branch || (hasBankDetails(invoice.invoiceType) ? DEFAULT_TAX_INVOICE_BANKING.branch : ''),
+      notes: invoice.paymentDetails?.notes || '',
+    },
+    extraFields: invoice.extraFields?.length 
+      ? invoice.extraFields 
+      : invoice.terms ? [{ label: 'Terms and conditions', value: invoice.terms }] : [{ label: 'Terms and conditions', value: '' }],
+    notes: invoice.notes || '',
+  });
 
   useEffect(() => {
     const initializeForm = async () => {
@@ -139,66 +266,12 @@ export default function CreateInvoice() {
             const data = await res.json();
             const invoice = data.invoices?.find(inv => inv._id === id);
             if (invoice) {
+              const company = await loadCompanyDefaults();
+              const loaded = invoiceToFormData(invoice);
               setFormData({
-                invoiceType: invoice.invoiceType || 'Invoice',
-                invoiceTitle: invoice.invoiceTitle || (invoice.invoiceType || 'Invoice').toUpperCase(),
-                invoiceNumber: invoice.invoiceNumber,
-                customInvoiceNumber: invoice.customInvoiceNumber || '',
-                orderNumber: invoice.orderNumber || '',
-                currency: invoice.currency || 'INR',
-                issueDate: invoice.issueDate ? invoice.issueDate.split('T')[0] : '',
-                dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '',
-                status: invoice.status || 'Pending',
-                client: {
-                  name: invoice.client?.name || '',
-                  companyName: invoice.client?.companyName || '',
-                  taxId: invoice.client?.taxId || invoice.client?.gstin || '',
-                  taxIdLabel: invoice.client?.taxIdLabel || 'Tax ID',
-                  address: invoice.client?.address || '',
-                  postalCode: invoice.client?.postalCode || '',
-                  email: invoice.client?.email || '',
-                  phone: invoice.client?.phone || '',
-                },
-                sender: {
-                  name: invoice.sender?.name || invoice.sender?.companyName || '',
-                  companyName: invoice.sender?.companyName || '',
-                  taxId: invoice.sender?.taxId || invoice.sender?.gstin || '',
-                  address: invoice.sender?.address || '',
-                  postalCode: invoice.sender?.postalCode || '',
-                  email: invoice.sender?.email || '',
-                  phone: invoice.sender?.phone || '',
-                  logoUrl: invoice.sender?.logoUrl !== undefined ? invoice.sender.logoUrl : '/logo.png',
-                  website: invoice.sender?.website || '',
-                },
-                items: invoice.items?.length
-                  ? invoice.items.map((it) => ({
-                      description: it.description || '',
-                      quantity: it.quantity,
-                      rate: it.rate,
-                      tax: it.tax || 0,
-                      amount: it.amount,
-                    }))
-                  : [{ description: '', quantity: 1, rate: 0, tax: 0, amount: 0 }],
-                taxRate: invoice.taxRate ?? 0,
-                discount: invoice.discount ?? 0,
-                signature: invoice.signature || {
-                  signatureType: 'typed',
-                  signatoryName: '',
-                  data: '',
-                },
-                paymentDetails: {
-                  primaryHolderName: invoice.paymentDetails?.primaryHolderName || (invoice.invoiceType === 'Tax Invoice' ? DEFAULT_TAX_INVOICE_BANKING.primaryHolderName : ''),
-                  accountNumber: invoice.paymentDetails?.accountNumber || (invoice.invoiceType === 'Tax Invoice' ? DEFAULT_TAX_INVOICE_BANKING.accountNumber : ''),
-                  accountType: invoice.paymentDetails?.accountType || (invoice.invoiceType === 'Tax Invoice' ? DEFAULT_TAX_INVOICE_BANKING.accountType : ''),
-                  bankName: invoice.paymentDetails?.bankName || (invoice.invoiceType === 'Tax Invoice' ? DEFAULT_TAX_INVOICE_BANKING.bankName : ''),
-                  ifscCode: invoice.paymentDetails?.ifscCode || (invoice.invoiceType === 'Tax Invoice' ? DEFAULT_TAX_INVOICE_BANKING.ifscCode : ''),
-                  branch: invoice.paymentDetails?.branch || (invoice.invoiceType === 'Tax Invoice' ? DEFAULT_TAX_INVOICE_BANKING.branch : ''),
-                  notes: invoice.paymentDetails?.notes || '',
-                },
-                extraFields: invoice.extraFields?.length 
-                  ? invoice.extraFields 
-                  : invoice.terms ? [{ label: 'Terms and conditions', value: invoice.terms }] : [{ label: 'Terms and conditions', value: '' }],
-                notes: invoice.notes || '',
+                ...loaded,
+                sender: company.sender,
+                paymentDetails: hasBankDetails(loaded.invoiceType) ? company.bank : loaded.paymentDetails,
               });
             } else {
               toast.error('Invoice not found');
@@ -211,41 +284,47 @@ export default function CreateInvoice() {
         } finally {
           setLoading(false);
         }
+      } else if (duplicateId) {
+        try {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/invoices/${duplicateId}`);
+          if (!res.ok) throw new Error('not found');
+          const source = await res.json();
+          const type = source.invoiceType || 'Invoice';
+          const nextNumber = await fetchNextInvoiceNumber(type);
+          const company = await loadCompanyDefaults();
+
+          // Same document, but a fresh number, today's date (keeping the original payment
+          // term), a Pending status, and no link back to a proforma.
+          const today = new Date();
+          const termMs =
+            source.issueDate && source.dueDate
+              ? new Date(source.dueDate) - new Date(source.issueDate)
+              : 15 * 24 * 60 * 60 * 1000;
+          const toDay = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+
+          setFormData({
+            ...invoiceToFormData(source),
+            sender: company.sender,
+            paymentDetails: hasBankDetails(type) ? company.bank : invoiceToFormData(source).paymentDetails,
+            invoiceNumber: nextNumber,
+            customInvoiceNumber: '',
+            issueDate: toDay(today),
+            dueDate: toDay(new Date(today.getTime() + Math.max(0, termMs))),
+            status: 'Pending',
+          });
+          setDuplicatedFrom(source.customInvoiceNumber || source.invoiceNumber);
+        } catch (err) {
+          console.error(err);
+          toast.error('Could not load the invoice to duplicate');
+          navigate('/admin/invoices');
+        } finally {
+          setLoading(false);
+        }
       } else {
         const initialType = searchParams.get('type') || 'Invoice';
-        const bankDetails = initialType === 'Tax Invoice' ? { ...DEFAULT_TAX_INVOICE_BANKING } : { ...EMPTY_BANKING };
         const nextNumber = await fetchNextInvoiceNumber(initialType);
-        
-        let defaultSender = { ...initialInvoiceState.sender };
-        try {
-          const settingsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/settings/company`);
-          if (settingsRes.ok) {
-            const data = await settingsRes.json();
-            if (data) {
-              defaultSender = {
-                name: data.companyName || '',
-                companyName: data.companyName || '',
-                taxId: data.taxId || '',
-                taxIdLabel: data.taxIdLabel || 'Tax ID',
-                address: data.address || '',
-                postalCode: data.postalCode || '',
-                email: data.email || '',
-                phone: data.phone || '',
-                logoUrl: data.logoUrl || '/logo.png',
-                website: '',
-              };
-              if (data.paymentDetails) {
-                // Update DEFAULT_TAX_INVOICE_BANKING in memory so type switching uses it
-                Object.assign(DEFAULT_TAX_INVOICE_BANKING, data.paymentDetails);
-                if (initialType === 'Tax Invoice') {
-                  Object.assign(bankDetails, data.paymentDetails);
-                }
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Error fetching default company settings:', err);
-        }
+        const { sender: defaultSender, bank } = await loadCompanyDefaults();
+        const bankDetails = hasBankDetails(initialType) ? bank : { ...EMPTY_BANKING };
 
         setFormData({
           ...initialInvoiceState,
@@ -262,7 +341,7 @@ export default function CreateInvoice() {
   }, [isEditing, id, searchParams]);
 
   const handleTypeChange = async (newType) => {
-    const bankDetails = newType === 'Tax Invoice'
+    const bankDetails = hasBankDetails(newType)
       ? { ...DEFAULT_TAX_INVOICE_BANKING }
       : { ...EMPTY_BANKING };
 
@@ -436,6 +515,11 @@ export default function CreateInvoice() {
       return;
     }
 
+    // Show the finished document first; saving happens from the preview.
+    setShowPreview(true);
+  };
+
+  const handleConfirmSave = async () => {
     setIsSaving(true);
     try {
       const url = isEditing
@@ -456,6 +540,7 @@ export default function CreateInvoice() {
             ? `${formData.invoiceType} updated successfully!`
             : `${formData.invoiceType} created successfully!`
         );
+        setShowPreview(false);
         navigate('/admin/invoices');
       } else {
         toast.error(data.message || 'Failed to save invoice');
@@ -506,7 +591,9 @@ export default function CreateInvoice() {
                 )}
               </div>
               <p className="text-sm text-gray-500 mt-0.5">
-                Specify the document details, its issuer, and its recipient.
+                {duplicatedFrom
+                  ? `Duplicated from ${duplicatedFrom}. Edit anything you need, then preview and save.`
+                  : 'Specify the document details, its issuer, and its recipient.'}
               </p>
             </div>
           </div>
@@ -515,7 +602,7 @@ export default function CreateInvoice() {
         {/* Document Type Selector Tabs */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2 p-1 bg-white border border-gray-200 shadow-sm rounded-2xl w-fit">
-            {['Invoice', 'Tax Invoice', 'Proforma Invoice'].map((type, idx) => (
+            {['Invoice', 'Proforma Invoice', 'Tax Invoice'].map((type, idx) => (
               <button
                 key={type}
                 type="button"
@@ -685,6 +772,24 @@ export default function CreateInvoice() {
                 />
               </div>
 
+              {/* PAN */}
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">
+                  PAN (optional)
+                </label>
+                <Input
+                  placeholder="E.g. ABCDE1234F"
+                  value={formData.client.pan || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      client: { ...formData.client, pan: e.target.value },
+                    })
+                  }
+                  className="text-xs h-9 bg-white font-mono"
+                />
+              </div>
+
               {/* Address */}
               <div className="md:col-span-2">
                 <label className="text-xs font-medium text-gray-700 block mb-1">
@@ -782,8 +887,8 @@ export default function CreateInvoice() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase tracking-wider">
-                    <th className="py-2.5 px-3 w-20 text-center rounded-tl-2xl">Qty</th>
-                    <th className="py-2.5 px-3">Description</th>
+                    <th className="py-2.5 px-3 rounded-tl-2xl">Description</th>
+                    <th className="py-2.5 px-3 w-20 text-center">Qty</th>
                     <th className="py-2.5 px-3 w-28 text-right">Price</th>
                     <th className="py-2.5 px-3 w-28 text-center">Taxes</th>
                     <th className="py-2.5 px-3 w-32 text-right">Subtotal</th>
@@ -793,6 +898,18 @@ export default function CreateInvoice() {
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {formData.items.map((item, idx) => (
                     <tr key={idx} className="hover:bg-gray-50/50">
+                      {/* Description */}
+                      <td className="py-2 px-3">
+                        <textarea
+                          required
+                          rows={Math.min(8, Math.max(1, String(item.description || '').split('\n').length))}
+                          placeholder="Item name (add more lines below for details)"
+                          value={item.description}
+                          onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                          className="w-full text-xs bg-white border border-input rounded-md px-3 py-1.5 leading-snug resize-y focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      </td>
+
                       {/* Qty */}
                       <td className="py-2 px-3">
                         <Input
@@ -803,17 +920,6 @@ export default function CreateInvoice() {
                           value={item.quantity}
                           onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
                           className="text-xs h-8 text-center bg-white font-mono"
-                        />
-                      </td>
-
-                      {/* Description */}
-                      <td className="py-2 px-3">
-                        <Input
-                          required
-                          placeholder="Item name"
-                          value={item.description}
-                          onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                          className="text-xs h-8 bg-white"
                         />
                       </td>
 
@@ -1218,16 +1324,59 @@ export default function CreateInvoice() {
                 disabled={isSaving}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-10 px-6 rounded-xl font-semibold shadow-sm"
               >
-                {isSaving
-                  ? 'Saving...'
-                  : isEditing
-                  ? `Update ${formData.invoiceType}`
-                  : `Generate & Save ${formData.invoiceType}`}
+                <Eye className="w-4 h-4 mr-1.5" />
+                {isEditing
+                  ? `Preview & Update ${formData.invoiceType}`
+                  : `Preview & Save ${formData.invoiceType}`}
               </Button>
             </div>
           </div>
         </form>
       </div>
+
+      {/* PREVIEW BEFORE SAVE MODAL */}
+      {showPreview && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-[1180px] h-[calc(100vh-1.5rem)] rounded-3xl shadow-2xl border border-gray-100 overflow-hidden flex">
+            {/* Whole document visible, scaled to fit */}
+            <div className="flex-1 min-w-0 bg-gray-100 p-3">
+              <FitToView>
+                <InvoiceDocument invoice={{ ...formData, ...calculateTotals() }} fit />
+              </FitToView>
+            </div>
+
+            <aside className="w-56 shrink-0 border-l border-gray-100 bg-white p-4 flex flex-col gap-2">
+              <div className="pb-3 mb-1 border-b border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900">Preview {formData.invoiceType}</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Check everything on the left. Nothing is saved until you confirm.
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={handleConfirmSave}
+                disabled={isSaving}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-10 px-3 rounded-xl font-semibold shadow-sm"
+              >
+                {isSaving
+                  ? 'Saving...'
+                  : isEditing
+                  ? 'Confirm & Update'
+                  : 'Confirm & Save'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowPreview(false)}
+                disabled={isSaving}
+                className="w-full text-xs h-10 px-3 rounded-xl"
+              >
+                Back to edit
+              </Button>
+            </aside>
+          </div>
+        </div>
+      )}
 
       {/* SIGNATURE CREATION MODAL */}
       {showSignatureModal && (

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Printer, ShieldCheck, AlertCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InvoiceDocument from '@/components/InvoiceDocument';
+import { displayInvoiceNumber } from '@/lib/invoiceNumber';
 
 const CURRENCY_SYMBOLS = {
   INR: '₹',
@@ -58,7 +59,7 @@ export default function ViewInvoicePublic() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${invoice.invoiceNumber || 'Invoice'}.pdf`;
+      a.download = `${invoice.invoiceType === 'Tax Invoice' ? 'Invoice-' : ''}${displayInvoiceNumber(invoice) || 'Invoice'}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
