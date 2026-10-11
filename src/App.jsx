@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Monitor } from 'lucide-react';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
@@ -30,7 +30,15 @@ import { Toaster } from 'react-hot-toast';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { SocketProvider } from './context/SocketContext';
 
-function App() {
+// Phones/tablets only get the desktop notice, except for the admin side (/admin...), the login pages,
+// the public client invoice link, and signed-in admins.
+const isAdminUser = () => {
+  try { return JSON.parse(localStorage.getItem('userInfo') || '{}')?.role === 'admin'; } catch { return false; }
+};
+const MOBILE_OPEN_PATHS = ['/admin', '/login', '/forgot-password', '/view-invoice'];
+
+function ResponsiveGate({ children }) {
+  const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -60,7 +68,8 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  if (isMobile) {
+  const pathOpen = MOBILE_OPEN_PATHS.some((p) => location.pathname === p || location.pathname.startsWith(p + '/'));
+  if (isMobile && !pathOpen && !isAdminUser()) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-blue-100 p-6">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center border border-gray-100">
@@ -79,10 +88,15 @@ function App() {
     );
   }
 
+  return children;
+}
+
+function App() {
   return (
     <ConfirmProvider>
       <BrowserRouter>
         <Toaster position="top-center" />
+        <ResponsiveGate>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -100,6 +114,7 @@ function App() {
             <Route path="settings" element={<Settings />} />
             
             {/* Admin Routes */}
+            <Route path="admin" element={<Navigate to="/dashboard" replace />} />
             <Route path="admin/work" element={<AdminWork />} />
             <Route path="admin/leaves" element={<AdminLeaves />} />
             <Route path="admin/holidays" element={<AdminHolidays />} />
@@ -120,6 +135,7 @@ function App() {
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        </ResponsiveGate>
       </BrowserRouter>
     </ConfirmProvider>
   );
